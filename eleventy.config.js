@@ -45,6 +45,9 @@ export default async function (eleventyConfig) {
       eleventyConfig.addWatchTarget(
         `${realPath}/{manifest.json,main.js,styles.css,README.md}`,
       );
+      // Plugin-declared assets (manifest.fonts/images file paths) can live
+      // anywhere under the plugin dir, so watch it broadly too.
+      eleventyConfig.addWatchTarget(`${realPath}/**`);
     }
   }
 
@@ -88,6 +91,14 @@ export default async function (eleventyConfig) {
         const src = path.join(pluginPath, font.file);
         if (!fs.existsSync(src)) continue;
         const dest = path.join(destDir, font.file);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
+      }
+      for (const image of manifest.images ?? []) {
+        if (typeof image?.file !== "string") continue;
+        const src = path.join(pluginPath, image.file);
+        if (!fs.existsSync(src)) continue;
+        const dest = path.join(destDir, image.file);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(src, dest);
       }

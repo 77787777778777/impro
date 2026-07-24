@@ -32,6 +32,39 @@ function parseFontEntry(entry, index) {
   return { ...entry, family, file };
 }
 
+function isPositiveInt(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+function parseImageEntry(entry, index) {
+  if (!entry || typeof entry !== "object") {
+    throw new Error(`images[${index}] must be an object`);
+  }
+  const { name, file, frameWidth, frameHeight, frameCount } = entry;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(`images[${index}] missing required field "name"`);
+  }
+  if (typeof file !== "string" || file.length === 0) {
+    throw new Error(`images[${index}] missing required field "file"`);
+  }
+  if (!/\.png$/i.test(file)) {
+    throw new Error(`images[${index}] file must end in .png`);
+  }
+  if (!isRelativePath(file)) {
+    throw new Error(`images[${index}] file must be a relative path`);
+  }
+  if (!isPositiveInt(frameWidth)) {
+    throw new Error(`images[${index}] frameWidth must be a positive integer`);
+  }
+  if (!isPositiveInt(frameHeight)) {
+    throw new Error(`images[${index}] frameHeight must be a positive integer`);
+  }
+  if (!isPositiveInt(frameCount)) {
+    throw new Error(`images[${index}] frameCount must be a positive integer`);
+  }
+  return { ...entry, name, file, frameWidth, frameHeight, frameCount };
+}
+
 function parsePluginManifest(pluginId, manifest) {
   for (const field of REQUIRED_MANIFEST_FIELDS) {
     if (typeof manifest[field] !== "string") {
@@ -48,6 +81,14 @@ function parsePluginManifest(pluginId, manifest) {
       throw new Error(`fonts must be an array`);
     }
     manifest.fonts = manifest.fonts.map((entry, i) => parseFontEntry(entry, i));
+  }
+  if (manifest.images !== undefined) {
+    if (!Array.isArray(manifest.images)) {
+      throw new Error(`images must be an array`);
+    }
+    manifest.images = manifest.images.map((entry, i) =>
+      parseImageEntry(entry, i),
+    );
   }
   return manifest;
 }
@@ -92,6 +133,17 @@ function assertFontMagicBytes(file, bytes) {
   const wantWoff2 = /\.woff2$/i.test(file);
   if (wantWoff2 ? !isWoff2 : !isWoff) {
     throw new Error(`font "${file}" has invalid magic bytes`);
+  }
+}
+
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+function assertPngMagicBytes(file, bytes) {
+  const view = new Uint8Array(bytes, 0, PNG_MAGIC.length);
+  const isPng = PNG_MAGIC.every((byte, i) => view[i] === byte);
+  if (!isPng) {
+    throw new Error(`image "${file}" has invalid magic bytes`);
   }
 }
 
@@ -363,6 +415,58 @@ export class SourceProvider {
     return new Blob([bytes], { type: mime });
   }
 
+  async getImage(
+    pluginId,
+    version,
+    repo,
+    file,
+    { frameWidth, frameHeight, frameCount },
+  ) {
+    let bytes;
+    if (pluginId.endsWith("__LOCAL")) {
+      const response = await fetch(`/plugins-local/${pluginId}/${file}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      bytes = await response.arrayBuffer();
+    } else {
+      if (!version || !repo) {
+        throw new Error("Version and repo are required");
+      }
+      const { host } = parseRepoSpec(repo);
+      if (host === "tangled") {
+        const url = await remoteAssetUrl({
+          repo,
+          file,
+          release: version,
+          raw: false,
+        });
+        const response = await this.pluginCache.fetch(url);
+        bytes = decodeTangledBlobContent(await response.json(), file);
+      } else {
+        const url = await remoteAssetUrl({ repo, file, release: version });
+        const response = await this.pluginCache.fetch(url);
+        bytes = await response.arrayBuffer();
+      }
+    }
+    if (bytes.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error(
+        `image "${file}" exceeds max size of ${MAX_IMAGE_BYTES} bytes`,
+      );
+    }
+    assertPngMagicBytes(file, bytes);
+    const blob = new Blob([bytes], { type: "image/png" });
+    const bitmap = await createImageBitmap(blob);
+    const expectedWidth = frameWidth * frameCount;
+    if (bitmap.width !== expectedWidth || bitmap.height !== frameHeight) {
+      bitmap.close();
+      throw new Error(
+        `image "${file}" is ${bitmap.width}x${bitmap.height}, expected ` +
+          `${expectedWidth}x${frameHeight} (frameWidth*frameCount x frameHeight)`,
+      );
+    }
+    bitmap.close();
+    return blob;
+  }
+
   async getReadme(pluginId, repo) {
     if (pluginId.endsWith("__LOCAL")) {
       const response = await fetch(`/plugins-local/${pluginId}/README.md`);
@@ -392,6 +496,11 @@ export class SourceProvider {
       const manifest = await this.getManifest(pluginId, version, repo);
       for (const font of manifest.fonts ?? []) {
         files.push(font.file);
+      }
+      for (const image of manifest.images ?? []) {
+        urls.push(
+          await remoteAssetUrl({ repo, file: image.file, release: version }),
+        );
       }
     } catch {
       // If the manifest can't be read the base URLs are still returned so

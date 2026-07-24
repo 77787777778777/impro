@@ -112,6 +112,21 @@ function makeStylesLoader() {
   };
 }
 
+function makeAssetsLoader() {
+  const mounts = [];
+  const unmounts = [];
+  return {
+    mounts,
+    unmounts,
+    mountImages(pluginId, descriptors) {
+      mounts.push({ pluginId, descriptors });
+    },
+    unmountImages(pluginId) {
+      unmounts.push(pluginId);
+    },
+  };
+}
+
 function makeProvider({ manifest, source, styles } = {}) {
   return {
     async getManifest(id) {
@@ -132,10 +147,17 @@ function makeProvider({ manifest, source, styles } = {}) {
 function makeBridge(overrides = {}) {
   const provider = overrides.provider ?? makeProvider();
   const stylesLoader = overrides.stylesLoader ?? makeStylesLoader();
+  const assetsLoader = overrides.assetsLoader ?? makeAssetsLoader();
   const loadPluginInstance = overrides.loadPluginInstance;
   return {
-    bridge: new PluginBridge(provider, stylesLoader, loadPluginInstance),
+    bridge: new PluginBridge(
+      provider,
+      stylesLoader,
+      assetsLoader,
+      loadPluginInstance,
+    ),
     stylesLoader,
+    assetsLoader,
     provider,
   };
 }

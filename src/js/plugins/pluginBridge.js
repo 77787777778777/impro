@@ -218,10 +218,12 @@ export class PluginBridge {
   constructor(
     sourceProvider,
     pluginStylesLoader,
+    pluginAssetsLoader,
     loadPluginInstance = PluginInstance.loadFromSource,
   ) {
     this._provider = sourceProvider;
     this._pluginStylesLoader = pluginStylesLoader;
+    this._pluginAssetsLoader = pluginAssetsLoader;
     this._loadPluginInstance = loadPluginInstance;
     this._registrationTargets = new Map();
     this._loadedPlugins = new Map();
@@ -332,6 +334,35 @@ export class PluginBridge {
         throw new Error("Failed to load plugin fonts");
       }
     }
+    if (manifest.images?.length) {
+      try {
+        const descriptors = await Promise.all(
+          manifest.images.map(async (image) => ({
+            ...image,
+            blob: await this._provider.getImage(
+              pluginId,
+              version,
+              repo,
+              image.file,
+              {
+                frameWidth: image.frameWidth,
+                frameHeight: image.frameHeight,
+                frameCount: image.frameCount,
+              },
+            ),
+          })),
+        );
+        this._pluginAssetsLoader.mountImages(pluginId, descriptors);
+      } catch (error) {
+        this._pluginStylesLoader.unmount(pluginId);
+        this._pluginAssetsLoader.unmountImages(pluginId);
+        logger.error(
+          `failed to load "${pluginId}": could not load images`,
+          error,
+        );
+        throw new Error("Failed to load plugin images");
+      }
+    }
     try {
       const pluginInstance = await this._loadPluginInstance(
         pluginId,
@@ -349,6 +380,7 @@ export class PluginBridge {
       return pluginInstance;
     } catch (error) {
       this._pluginStylesLoader.unmount(pluginId);
+      this._pluginAssetsLoader.unmountImages(pluginId);
       logger.error(`"${pluginId}" failed during initialization:`, error);
       throw new Error("Plugin failed during initialization");
     }
@@ -410,6 +442,7 @@ export class PluginBridge {
     instance.unload();
     this._loadedPlugins.delete(pluginId);
     this._pluginStylesLoader.unmount(pluginId);
+    this._pluginAssetsLoader.unmountImages(pluginId);
   }
 
   async reloadPlugin(pluginId, version, repo) {

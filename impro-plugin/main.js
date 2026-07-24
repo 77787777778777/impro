@@ -731,6 +731,21 @@ class BlobImageComponent {
   }
 }
 
+class SpriteComponent {
+  constructor(containerEl) {
+    this.el = containerEl.createEl("plugin-sprite");
+  }
+  // `name` is the "name" key of an entry in this plugin's manifest.json
+  // `images` array. Frame geometry (frameWidth/frameHeight/frameCount) is
+  // declared there too, not here, and is resolved host-side — this mirrors
+  // plugin-blob-image's did/cid trust model rather than letting the plugin
+  // hand the host a raw URL.
+  setImage(name) {
+    this.el.setAttr("image", String(name));
+    return this;
+  }
+}
+
 class ProfilesListComponent {
   constructor(containerEl) {
     this.el = containerEl.createEl("plugin-profiles-list");
@@ -890,6 +905,12 @@ export class VirtualEl {
 
   createBlobImage(callback) {
     const component = new BlobImageComponent(this);
+    if (typeof callback === "function") callback(component);
+    return component;
+  }
+
+  createSprite(callback) {
+    const component = new SpriteComponent(this);
     if (typeof callback === "function") callback(component);
     return component;
   }

@@ -8,6 +8,7 @@ import "/js/components/plugin-profiles-list.js";
 import "/js/components/plugin-posts-feed.js";
 import "/js/components/plugin-icon.js";
 import "/js/components/plugin-blob-image.js";
+import "/js/components/plugin-sprite.js";
 
 function isExternalHref(href) {
   try {
@@ -47,6 +48,7 @@ const ALLOWED_TAGS = [
   "plugin-posts-feed",
   "plugin-icon",
   "plugin-blob-image",
+  "plugin-sprite",
   "toggle-switch",
 ];
 
@@ -471,6 +473,11 @@ export class PluginRenderer {
       element.isAuthenticated = isAuthenticated;
       element.pluginService = pluginService;
       element.postInteractionHandler = postInteractionHandler;
+    }
+    if (tag === "plugin-sprite") {
+      const { pluginService } = this.renderContext;
+      element.pluginId = this.pluginId;
+      element.pluginService = pluginService;
     }
     if (tag === "toggle-switch") {
       // toggle-switch is controlled — flip its state here since the plugin

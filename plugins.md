@@ -35,6 +35,8 @@ Plugins are currently in **beta** as the API surface is being expanded. However,
 - Store settings on a user account
 - Override component rendering with custom HTML (e.g. posts, profiles, buttons etc) [in-progress]
 - Add a full page with custom HTML content [in-progress]
+- Ship bundled bitmap images (e.g. spritesheets) via `manifest.json`'s `images`
+  array, and render a frame of one with `createSprite()` — see "Images" below
 - Add custom feed filters
 - Transform rich text in posts
 - Make whitelisted network requests (requires permissions)
@@ -47,3 +49,36 @@ Plugins are currently in **beta** as the API surface is being expanded. However,
 - Read or modify page HTML directly
 
 If there's a use case you'd like Impro to support that it doesn't currently, please open an issue in this repository to discuss!
+
+### Images
+
+Plugins can't reference arbitrary image URLs (no `<img>` tag, and `url()` is
+rejected everywhere in plugin CSS). Instead, declare bundled PNG spritesheets
+statically in `manifest.json`, the same way `fonts` works:
+
+```json
+"images": [
+  {
+    "name": "idle_breathe",
+    "file": "assets/001_idle_breathe.png",
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "frameCount": 15
+  }
+]
+```
+
+The file must be a single horizontal strip of `frameCount` frames, each
+`frameWidth`x`frameHeight`, so the PNG's total size is exactly
+`frameWidth * frameCount` by `frameHeight` (validated at load time) — and no
+larger than 2MB. Render a frame with:
+
+```js
+containerEl.createSprite((sprite) => sprite.setImage("idle_breathe"));
+```
+
+Animating between frames is done entirely with your own CSS
+`@keyframes`/`steps()` targeting `background-position-x` (both are allowed —
+only `url()`-family functions are rejected). Consider wrapping the animation in
+`@media (prefers-reduced-motion: reduce)`, since the host has no way to
+enforce this on your behalf.
