@@ -12,6 +12,7 @@ import {
   LocalPluginRegistry,
 } from "/js/plugins/pluginRegistry.js";
 import { PluginCache } from "/js/plugins/pluginCache.js";
+import { PluginAssetsLoader } from "/js/plugins/pluginAssetsLoader.js";
 import { PluginPreferencesManager } from "/js/plugins/pluginPreferencesManager.js";
 import { SourceProvider } from "/js/plugins/sourceProvider.js";
 import { PluginStylesLoader } from "/js/plugins/pluginStylesLoader.js";
@@ -179,9 +180,11 @@ export class PluginService extends ReactiveStore {
     this.pluginCache = new PluginCache();
     this.sourceProvider = new SourceProvider(this.pluginCache);
     this.pluginStylesLoader = new PluginStylesLoader();
+    this.pluginAssetsLoader = new PluginAssetsLoader();
     this.pluginBridge = new PluginBridge(
       this.sourceProvider,
       this.pluginStylesLoader,
+      this.pluginAssetsLoader,
     );
     this.prefManager = new PluginPreferencesManager(preferencesProvider);
     this.$installedPlugins = new Signal.Computed(() =>
@@ -948,6 +951,10 @@ export class PluginService extends ReactiveStore {
 
   getSlotEntries(name) {
     return [...(this.$slots.get(name) ?? [])];
+  }
+
+  getPluginImageInfo(pluginId, name) {
+    return this.pluginAssetsLoader.get(pluginId, name);
   }
 
   getSettingTabs() {
