@@ -61,6 +61,7 @@ function sidebarNavTemplate({
               disabled: item.disabled,
             })}
             data-testid="sidebar-nav-${item.id}"
+            data-plugin-landmark="nav-${item.id}"
             @click=${function (e) {
               const isActive = activeNavItem === item.id;
               if (isActive) {
@@ -311,6 +312,7 @@ export function sidebarTemplate({
         ? html`<button
             class="rounded-button rounded-button-primary sidebar-compose-button"
             data-testid="sidebar-compose-button"
+            data-plugin-landmark="compose-button"
             @click=${() => onClickComposeButton()}
           >
             ${editIconTemplate()} <span>New Post</span>

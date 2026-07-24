@@ -173,6 +173,22 @@ class PluginData {
   getRecord(repo, collection, rkey) {
     return hostCall("getRecord", { repo, collection, rkey });
   }
+  // A one-time snapshot of real UI chrome geometry (sidebar, footer nav,
+  // compose button, notifications icon) — { viewport: {width, height},
+  // landmarks: { [name]: {x, y, width, height} | null } }. A landmark is
+  // null when it isn't currently present/visible (e.g. no compose button
+  // on this view, or the mobile sidebar drawer is closed). Not push-based;
+  // call again to get fresh values after layout may have changed.
+  getLandmarkRects() {
+    return hostCall("getLandmarkRects");
+  }
+  // Plugin code runs in a real Worker with no window/matchMedia of its own
+  // (see getLandmarkRects' comment on the host side for why), so checking
+  // the user's OS-level reduced-motion preference has to go through the
+  // host. Not push-based — call again if you need to notice a live change.
+  prefersReducedMotion() {
+    return hostCall("prefersReducedMotion");
+  }
 }
 
 class App {

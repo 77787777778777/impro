@@ -88,7 +88,11 @@ export function footerTemplate({
   ];
 
   return html`
-    <footer class="footer-nav" data-testid="footer-nav">
+    <footer
+      class="footer-nav"
+      data-testid="footer-nav"
+      data-plugin-landmark="footer-nav"
+    >
       <nav>
         ${menuItems.map((item) => {
           const active = activeNavItem === item.id;
@@ -106,6 +110,7 @@ export function footerTemplate({
             })}
             href=${item.url}
             data-testid="footer-nav-${item.id}"
+            data-plugin-landmark="nav-${item.id}"
             ?disabled=${item.disabled}
             @long-press=${longPressEnabled ? () => onLongPressProfile() : null}
             @click=${(e) => {

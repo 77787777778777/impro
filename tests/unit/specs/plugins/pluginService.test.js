@@ -1398,6 +1398,35 @@ describe("refreshSlot host method", () => {
   });
 });
 
+describe("prefersReducedMotion host method", () => {
+  // Regression test: plugin code always runs in a real Worker (even
+  // "sandboxed" plugins relay into a nested Worker — see
+  // plugin-sandbox.html), which has no window/matchMedia of its own. A
+  // plugin (buddy) once called window.matchMedia directly from inside its
+  // own code and crashed with "window is not defined" on every invocation,
+  // permanently breaking its movement loop (the tick scheduler had no
+  // error handling, so a throwing tick just silently stopped rescheduling
+  // forever). This host method exists so plugins never need to touch
+  // matchMedia themselves at all.
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  it("reflects window.matchMedia's current value", () => {
+    const { provider } = makeProvider();
+    const service = new PluginService(provider, null);
+    const original = window.matchMedia;
+    try {
+      window.matchMedia = (query) => ({ matches: true, media: query });
+      assert.equal(getHandler(service, "prefersReducedMotion")(), true);
+      window.matchMedia = (query) => ({ matches: false, media: query });
+      assert.equal(getHandler(service, "prefersReducedMotion")(), false);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
 describe("broadcastEvent", () => {
   function addListener(service, event, pluginId, handler) {
     let listeners = service.registries.eventListeners.get(event);

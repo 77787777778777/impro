@@ -161,3 +161,56 @@ its callback:
 this._mood = "happy";
 this.refreshSlot("overlay");
 ```
+
+### UI geometry
+
+Plugins can't read the page's real DOM, but a widget that moves around the
+screen (e.g. in the overlay slot) often needs to know where the app's own
+chrome actually is, so it can avoid overlapping it or move toward something
+meaningful. `this.app.data.getLandmarkRects()` returns a one-time snapshot
+of real, measured positions for a small whitelist of elements — never
+structure or content, just numbers:
+
+```js
+const { viewport, landmarks } = await this.app.data.getLandmarkRects();
+// viewport: { width, height }
+// Each of the following is { x, y, width, height } | null:
+// landmarks.sidebar
+// landmarks["footer-nav"]
+// landmarks["compose-button"]
+// landmarks["nav-home"] / landmarks["nav-search"] / landmarks["nav-notifications"] /
+//   landmarks["nav-chat"] / landmarks["nav-feeds"] / landmarks["nav-bookmarks"] /
+//   landmarks["nav-profile"] / landmarks["nav-settings"]
+```
+
+The `nav-*` entries are the individual sidebar/footer navigation items (home,
+search, notifications, chat, feeds, bookmarks, profile, settings) — not every
+one exists on every screen (e.g. "feeds"/"bookmarks"/"settings" only appear
+in the desktop sidebar, not the mobile footer nav, and a logged-out sidebar
+only has "home"/"search"), so most of these are `null` on any given
+viewport, same as any other landmark.
+
+A landmark is `null` when it isn't currently present or visible — e.g. no
+compose button on the current view, or the mobile sidebar drawer is closed.
+This isn't push-based: layout can change (resize, navigation, opening the
+mobile sidebar), so call it again whenever you need fresh values rather
+than caching the result.
+
+### Reduced motion
+
+**Plugin code always runs in a real Worker — even a "sandboxed" plugin,
+which just relays messages through an iframe into a nested Worker it
+creates — so `window`, `document`, and browser APIs tied to a rendering
+viewport (like `matchMedia`) are never available inside your plugin,
+regardless of what you name the global.** If your plugin animates or moves
+something and wants to respect the user's OS-level reduced-motion
+preference, ask the host instead of trying `window.matchMedia` yourself:
+
+```js
+if (await this.app.data.prefersReducedMotion()) {
+  // skip/simplify movement
+}
+```
+
+Like `getLandmarkRects()`, this isn't push-based — call it again if you
+need to notice a live change rather than caching the result.

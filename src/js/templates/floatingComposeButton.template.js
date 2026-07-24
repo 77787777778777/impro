@@ -5,6 +5,7 @@ export function floatingComposeButtonTemplate({ onClick }) {
   return html`<button
     class="fab floating-compose-button"
     data-testid="floating-compose-button"
+    data-plugin-landmark="compose-button"
     @click=${() => onClick()}
   >
     ${editIconTemplate()}

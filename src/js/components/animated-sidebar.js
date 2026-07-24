@@ -37,6 +37,7 @@ class AnimatedSidebar extends Component {
     render(
       html`<dialog
         class="sidebar"
+        data-plugin-landmark="sidebar"
         @click=${(event) => {
           if (event.target.tagName === "DIALOG") {
             this.close();

@@ -13,6 +13,7 @@ import {
 } from "/js/plugins/pluginRegistry.js";
 import { PluginCache } from "/js/plugins/pluginCache.js";
 import { PluginAssetsLoader } from "/js/plugins/pluginAssetsLoader.js";
+import { getLandmarkRects } from "/js/plugins/pluginLandmarks.js";
 import { PluginPreferencesManager } from "/js/plugins/pluginPreferencesManager.js";
 import { SourceProvider } from "/js/plugins/sourceProvider.js";
 import { PluginStylesLoader } from "/js/plugins/pluginStylesLoader.js";
@@ -460,6 +461,20 @@ export class PluginService extends ReactiveStore {
 
     this.pluginBridge.addHostMethod("getRecord", (plugin, args) =>
       this.slingshot.getRecord(args),
+    );
+
+    this.pluginBridge.addHostMethod("getLandmarkRects", () =>
+      getLandmarkRects(),
+    );
+
+    // Plugin code always runs in a real Worker (even "sandboxed" plugins —
+    // see plugin-sandbox.html, which relays messages to a nested Worker it
+    // creates) — window/matchMedia aren't available there at all, since
+    // media queries are inherently tied to a rendering viewport a Worker
+    // doesn't have. The host has to answer this on the plugin's behalf.
+    this.pluginBridge.addHostMethod(
+      "prefersReducedMotion",
+      () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     );
 
     this.pluginBridge.addHostMethod("getCurrentUser", () => {
