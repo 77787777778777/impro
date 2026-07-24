@@ -23,6 +23,7 @@ import {
   diffPermissions,
   isEmptyPermissions,
   isActionAllowed,
+  isUiAllowed,
 } from "/js/plugins/pluginPermissions.js";
 import { compareVersions, groupBy, isDev, sortBy } from "/js/utils.js";
 import {
@@ -43,6 +44,11 @@ function requireHostMethodArg(method, name, value) {
 }
 
 export const PLUGIN_PREVIEW_QUERY_PARAM = "plugin-preview";
+
+// Reserved slot name for the persistent, route-independent overlay mounted
+// once in the app shell (see mainLayout.js), as opposed to ordinary
+// registerSlot() usages which are only rendered within a specific view.
+export const OVERLAY_SLOT_NAME = "overlay";
 
 export function arePluginsDisabledByQueryParam() {
   const params = new URLSearchParams(window.location.search);
@@ -282,6 +288,15 @@ export class PluginService extends ReactiveStore {
       },
     );
     this.pluginBridge.addRegistrationTarget("slot", (plugin, message) => {
+      if (
+        message.name === OVERLAY_SLOT_NAME &&
+        !isUiAllowed("overlay", plugin.permissions)
+      ) {
+        console.warn(
+          `[plugins] "${plugin.pluginId}" tried to register the "${OVERLAY_SLOT_NAME}" slot without the "overlay" ui permission`,
+        );
+        return null;
+      }
       const entry = {
         pluginId: plugin.pluginId,
         invoke: (context) => plugin.call(message.handlerId, context),
@@ -345,6 +360,15 @@ export class PluginService extends ReactiveStore {
         this.emit("feedFiltersRefresh", { pluginId: plugin.pluginId, feedURI });
       },
     );
+
+    // Forces plugin-slot.js's effect to refire for `name`, re-invoking every
+    // registered entry's callback (not just the calling plugin's) — relies
+    // on SignalMap's per-key storage always notifying on .set(), even with
+    // an unchanged value.
+    this.pluginBridge.addHostMethod("refreshSlot", (plugin, { name }) => {
+      const current = this.$slots.get(name) ?? [];
+      this.$slots.set(name, current);
+    });
 
     this.pluginBridge.addHostMethod(
       "applyStyleSnippet",

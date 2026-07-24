@@ -14,9 +14,11 @@ class PluginSlot extends Component {
     if (!this.pluginService) {
       throw new Error("pluginService is required");
     }
-    if (!this.interactionHandlers) {
-      throw new Error("interactionHandlers is required");
-    }
+    // Only surfaces like plugin-posts-feed rendering actually read
+    // interactionHandlers (see pluginRendering.js); slots with no post/
+    // profile interaction surface (e.g. the persistent overlay slot in
+    // mainLayout.js) have no need to supply one.
+    this.interactionHandlers ??= {};
     this._pluginRoots = new Map();
     this._currentRequest = null;
     this._subscribe();
@@ -42,7 +44,7 @@ class PluginSlot extends Component {
 
   // TODO - automatic?
   static get observedAttributes() {
-    return ["name", "context-uri"];
+    return ["name", "context-uri", "context-page", "context-notifications"];
   }
 
   attributeChangedCallback(name, oldValue, newValue) {

@@ -6,6 +6,60 @@ import { footerTemplate } from "/js/templates/footer.template.js";
 import { eyeIconTemplate } from "/js/templates/icons/eyeIcon.template.js";
 import { PLUGIN_PREVIEW_QUERY_PARAM } from "/js/plugins/pluginService.js";
 
+// Coarse "what kind of page is the user looking at" categories, for the
+// overlay plugin slot's context-page attribute. There's no ready-made small
+// enum for this in the router — derived here from the route-pattern string
+// (router.js's $currentRoute.get().route) rather than touching every route
+// registration in index.html.
+const PAGE_KIND_ROUTES = {
+  home: ["/", "/intent/compose"],
+  notifications: ["/notifications"],
+  chat: [
+    "/messages",
+    "/messages/inbox",
+    "/messages/:convoId",
+    "/messages/:convoId/settings",
+  ],
+  thread: [
+    "/profile/:handleOrDid/post/:rkey",
+    "/profile/:handleOrDid/post/:rkey/likes",
+    "/profile/:handleOrDid/post/:rkey/quotes",
+    "/profile/:handleOrDid/post/:rkey/reposts",
+  ],
+  profile: [
+    "/profile/:handleOrDid",
+    "/profile",
+    "/profile/:handleOrDid/followers",
+    "/profile/:handleOrDid/following",
+    "/profile/:handleOrDid/known-followers",
+    "/profile/:handleOrDid/lists/:rkey",
+  ],
+  settings: [
+    "/settings",
+    "/settings/appearance",
+    "/settings/muted-words",
+    "/settings/muted-accounts",
+    "/settings/blocked-accounts",
+    "/settings/advanced",
+    "/settings/plugins",
+    "/settings/plugins/:pluginId",
+  ],
+  discover: [
+    "/search",
+    "/feeds",
+    "/bookmarks",
+    "/hashtag/:tag",
+    "/profile/:handleOrDid/feed/:rkey",
+  ],
+};
+
+function derivePageKind(route) {
+  for (const [kind, patterns] of Object.entries(PAGE_KIND_ROUTES)) {
+    if (patterns.includes(route)) return kind;
+  }
+  return "other";
+}
+
 function exitPluginPreview() {
   const url = new URL(window.location.href);
   url.searchParams.delete(PLUGIN_PREVIEW_QUERY_PARAM);
@@ -48,6 +102,8 @@ function pluginPreviewBannerTemplate({ plugins }) {
 }
 import { Layout } from "/js/router.js";
 import "/js/components/animated-sidebar.js";
+import "/js/components/plugin-slot.js";
+import { OVERLAY_SLOT_NAME } from "/js/plugins/pluginService.js";
 
 export function mainLayoutTemplate({
   isAuthenticated = true,
@@ -62,6 +118,7 @@ export function mainLayoutTemplate({
   previewingPlugins = [],
   onLongPressProfile = null,
   groupChatLinkService,
+  pageKind = "other",
 }) {
   return html`
     <div
@@ -89,6 +146,14 @@ export function mainLayoutTemplate({
           ${children}
         </div>
         <div class="view-column-right"></div>
+      </div>
+      <div class="plugin-overlay-container">
+        <plugin-slot
+          name=${OVERLAY_SLOT_NAME}
+          context-page=${pageKind}
+          context-notifications=${numNotifications ?? 0}
+          .pluginService=${pluginService}
+        ></plugin-slot>
       </div>
       ${pluginPreviewBannerTemplate({ plugins: previewingPlugins })}
       ${footerTemplate({
@@ -158,6 +223,7 @@ export class MainLayout extends Layout {
         typeof layoutOptions.activeNavItem === "function"
           ? layoutOptions.activeNavItem(currentRoute.params)
           : (layoutOptions.activeNavItem ?? null);
+      const pageKind = derivePageKind(currentRoute?.route ?? null);
       const previewingPlugins = pluginService.isPreviewMode
         ? pluginService.$pluginsInfo.get().filter((plugin) => plugin.loaded)
         : [];
@@ -178,6 +244,7 @@ export class MainLayout extends Layout {
           previewingPlugins,
           onLongPressProfile,
           groupChatLinkService,
+          pageKind,
         }),
         container,
       );

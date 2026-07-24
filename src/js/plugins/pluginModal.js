@@ -115,6 +115,10 @@ const ACTION_LABELS = {
     'Send feed feedback (e.g. "show fewer/more like this") on your behalf',
 };
 
+const UI_LABELS = {
+  overlay: "Show a persistent overlay on top of every screen",
+};
+
 function permissionsListTemplate({ permissions }) {
   const sections = [];
   const fetchPatterns = permissions.fetch ?? [];
@@ -137,6 +141,18 @@ function permissionsListTemplate({ permissions }) {
         <ul class="permission-prompt-list">
           ${actionScopes.map(
             (scope) => html`<li>${ACTION_LABELS[scope] ?? scope}</li>`,
+          )}
+        </ul>
+      </div>
+    `);
+  }
+  const uiScopes = permissions.ui ?? [];
+  if (uiScopes.length > 0) {
+    sections.push(html`
+      <div class="permission-prompt-section">
+        <ul class="permission-prompt-list">
+          ${uiScopes.map(
+            (scope) => html`<li>${UI_LABELS[scope] ?? scope}</li>`,
           )}
         </ul>
       </div>

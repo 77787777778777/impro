@@ -1329,6 +1329,75 @@ describe("slot registry", () => {
   });
 });
 
+describe("refreshSlot host method", () => {
+  function makeServiceWithRealBridge() {
+    const { provider } = makeProvider();
+    return new PluginService(provider, null);
+  }
+
+  function register(service, plugin, message) {
+    const handler = service.pluginBridge._registrationTargets.get("slot");
+    return handler(plugin, message);
+  }
+
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  it("re-invokes every entry registered for the slot", async () => {
+    const service = makeServiceWithRealBridge();
+    const calls = [];
+    const makePlugin = (pluginId) => ({
+      pluginId,
+      call: (handlerId, ...args) => {
+        calls.push({ pluginId, handlerId, args });
+        return Promise.resolve(null);
+      },
+    });
+    register(service, makePlugin("alpha"), {
+      target: "slot",
+      name: "x",
+      handlerId: 1,
+    });
+    register(service, makePlugin("beta"), {
+      target: "slot",
+      name: "x",
+      handlerId: 2,
+    });
+    for (const entry of service.getSlotEntries("x")) {
+      await entry.invoke({});
+    }
+    calls.length = 0;
+
+    await getHandler(service, "refreshSlot")(
+      { pluginId: "alpha" },
+      {
+        name: "x",
+      },
+    );
+    for (const entry of service.getSlotEntries("x")) {
+      await entry.invoke({});
+    }
+    assert.deepEqual(
+      calls.map((c) => c.pluginId),
+      ["alpha", "beta"],
+    );
+  });
+
+  it("is a no-op for a slot with no registered entries", () => {
+    const service = makeServiceWithRealBridge();
+    assert.doesNotThrow(() => {
+      getHandler(service, "refreshSlot")(
+        { pluginId: "alpha" },
+        {
+          name: "nope",
+        },
+      );
+    });
+    assert.deepEqual(service.getSlotEntries("nope"), []);
+  });
+});
+
 describe("app.data host methods", () => {
   function makeServiceWithRealBridge() {
     const { provider } = makeProvider();

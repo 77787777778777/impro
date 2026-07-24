@@ -1,6 +1,7 @@
 import { unique } from "/js/utils.js";
 
 const ACTION_SCOPES = ["mute", "block", "feedFeedback"];
+const UI_SCOPES = ["overlay"];
 
 export function getPermissionsFromManifest(manifest) {
   return parsePermissions(manifest.permissions ?? {});
@@ -26,6 +27,15 @@ export function parsePermissions(permissions) {
     );
     if (actionScopes.length > 0) parsed.actions = actionScopes;
   }
+  if (permissions.ui) {
+    const uiArray = Array.isArray(permissions.ui)
+      ? permissions.ui
+      : [permissions.ui];
+    const uiScopes = unique(
+      uiArray.filter((entry) => UI_SCOPES.includes(entry)),
+    );
+    if (uiScopes.length > 0) parsed.ui = uiScopes;
+  }
   return parsed;
 }
 
@@ -33,6 +43,12 @@ export function parsePermissions(permissions) {
 // like this" feed-interaction signal)
 export function isActionAllowed(action, permissions) {
   return (permissions.actions ?? []).includes(action);
+}
+
+// scope is one of UI_SCOPES (currently just "overlay" — a persistent,
+// route-independent widget mounted in the app shell, see OVERLAY_SLOT_NAME)
+export function isUiAllowed(scope, permissions) {
+  return (permissions.ui ?? []).includes(scope);
 }
 
 export function diffPermissions(current, next) {

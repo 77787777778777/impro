@@ -194,6 +194,7 @@ html {
   --message-input-z-index: 4;
   --reaction-palette-z-index: 5;
   --toast-z-index: 5;
+  --plugin-overlay-z-index: 4;
   --fab-z-index: 6;
   --sidebar-z-index: 8;
   --lightbox-container-z-index: 9;
@@ -10291,6 +10292,18 @@ p.setting-item-desc {
 
 .subscribe-list-button {
   margin-right: 12px;
+}
+
+/* Persistent, route-independent mount point for plugins registering the
+   "overlay" slot (see pluginService.js's OVERLAY_SLOT_NAME) — e.g. a
+   screen-companion widget. Stays click-through by default so a purely
+   decorative overlay doesn't block the rest of the app; plugins opt
+   individual interactive elements back in via their own CSS. */
+.plugin-overlay-container {
+  position: fixed;
+  inset: 0;
+  z-index: var(--plugin-overlay-z-index);
+  pointer-events: none;
 }
 
 .plugin-preview-banner {

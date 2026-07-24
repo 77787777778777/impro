@@ -326,9 +326,18 @@ describe("plugin-slot", () => {
   });
 
   describe("PluginSlot - interactionHandlers", () => {
-    it("throws when interactionHandlers is not set", () => {
+    it("defaults interactionHandlers to {} when not set", () => {
+      // Slots with no post/profile interaction surface (e.g. the persistent
+      // overlay slot mounted in mainLayout.js) have no need to supply one.
       const element = document.createElement("plugin-slot");
       element.pluginService = makePluginService();
+      element.setAttribute("name", "x");
+      element.connectedCallback();
+      assert.deepEqual(element.interactionHandlers, {});
+    });
+
+    it("still throws when pluginService is not set", () => {
+      const element = document.createElement("plugin-slot");
       element.setAttribute("name", "x");
       let caught = null;
       try {
@@ -337,7 +346,7 @@ describe("plugin-slot", () => {
         caught = error;
       }
       assert(caught instanceof Error);
-      assert.deepEqual(caught.message, "interactionHandlers is required");
+      assert.deepEqual(caught.message, "pluginService is required");
     });
   });
 

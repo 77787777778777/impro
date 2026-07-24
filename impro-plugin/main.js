@@ -402,6 +402,14 @@ export class Plugin {
     });
   }
 
+  // Forces every plugin currently registered for slot `name` (not just this
+  // one) to re-invoke its callback, e.g. after internal state driving what
+  // that callback renders has changed. Complements registerSlot's own
+  // re-invocation on registration-set changes.
+  refreshSlot(name) {
+    return hostCall("refreshSlot", { name });
+  }
+
   onload() {}
   onunload() {}
 

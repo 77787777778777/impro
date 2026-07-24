@@ -37,6 +37,9 @@ Plugins are currently in **beta** as the API surface is being expanded. However,
 - Add a full page with custom HTML content [in-progress]
 - Ship bundled bitmap images (e.g. spritesheets) via `manifest.json`'s `images`
   array, and render a frame of one with `createSprite()` — see "Images" below
+- Show a persistent widget on top of every screen, regardless of route, via
+  the `"overlay"` slot (requires the `ui: ["overlay"]` permission) — see
+  "Persistent overlay" below
 - Add custom feed filters
 - Transform rich text in posts
 - Make whitelisted network requests (requires permissions)
@@ -82,3 +85,31 @@ Animating between frames is done entirely with your own CSS
 only `url()`-family functions are rejected). Consider wrapping the animation in
 `@media (prefers-reduced-motion: reduce)`, since the host has no way to
 enforce this on your behalf.
+
+### Persistent overlay
+
+Most plugin UI (sidebar items, modals, toasts, `registerSlot` inside a
+specific view) only appears in response to user action or on one page. To
+show something on every screen regardless of navigation — e.g. a screen
+companion — register the reserved `"overlay"` slot name instead:
+
+```js
+this.registerSlot("overlay", () => {
+  const el = new VirtualEl("div");
+  el.addClass("my-overlay-root");
+  el.createSprite((sprite) => sprite.setImage("idle_breathe"));
+  return el;
+});
+```
+
+This requires declaring `"permissions": { "ui": ["overlay"] }` in
+`manifest.json`, shown to the user as a consent prompt at install/update time
+— a permanent full-viewport overlay is a more invasive capability than
+anything else available to plugins today. Without the permission, registration
+silently no-ops (a console warning, no thrown error).
+
+The overlay container itself is `pointer-events: none` so a purely decorative
+widget doesn't block clicks elsewhere in the app; opt individual interactive
+elements back in with your own CSS (`pointer-events: auto`). If multiple
+plugins register the overlay slot, they're simply stacked as siblings in
+registration order — pick an unobtrusive corner and keep your footprint small.
