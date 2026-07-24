@@ -258,6 +258,73 @@ describe("plugin-slot", () => {
     });
   });
 
+  describe("PluginSlot - DOM stability", () => {
+    // Regression test: replaceChildren() unconditionally detaches and
+    // reattaches every child per the DOM spec's "replace all" algorithm,
+    // even when passed the exact same node references already in place —
+    // which would cancel any CSS animation/transition a plugin is running
+    // on its rendered element every time the slot reconciles (e.g. on a
+    // context change or refreshSlot call), not just when content actually
+    // changes.
+    function spyOnReplaceChildren(element) {
+      const calls = [];
+      const original = element.replaceChildren.bind(element);
+      element.replaceChildren = (...args) => {
+        calls.push(args);
+        return original(...args);
+      };
+      return calls;
+    }
+
+    it("does not call replaceChildren when reconcile produces identical children", async () => {
+      const pluginService = makePluginService({
+        entries: {
+          x: [
+            {
+              pluginId: "alpha",
+              invoke: async (context) => ({ tag: "div", text: context.uri }),
+            },
+          ],
+        },
+      });
+      const slot = makeSlot({
+        pluginService,
+        name: "x",
+        context: { uri: "at://one" },
+      });
+      document.body.appendChild(slot);
+      await flushMicrotasks();
+      const firstChild = slot.children[0];
+
+      const calls = spyOnReplaceChildren(slot);
+      slot.setAttribute("context-uri", "at://two");
+      await flushMicrotasks();
+
+      assert.deepEqual(calls, []);
+      // Content still updates in place (same node, mutated text) even
+      // though replaceChildren was skipped.
+      assert.equal(slot.children[0], firstChild);
+      assert.equal(slot.children[0].textContent, "at://two");
+    });
+
+    it("still calls replaceChildren when the entry set actually changes", async () => {
+      const pluginService = makePluginService({ entries: { x: [] } });
+      const slot = makeSlot({ pluginService, name: "x" });
+      document.body.appendChild(slot);
+      await flushMicrotasks();
+      assert.equal(slot.children.length, 0);
+
+      const calls = spyOnReplaceChildren(slot);
+      pluginService.setSlotEntries("x", [
+        { pluginId: "alpha", invoke: async () => ({ tag: "div", text: "hi" }) },
+      ]);
+      await flushMicrotasks();
+
+      assert.equal(calls.length, 1);
+      assert.equal(slot.children.length, 1);
+    });
+  });
+
   describe("PluginSlot - interactionHandlers", () => {
     it("throws when interactionHandlers is not set", () => {
       const element = document.createElement("plugin-slot");

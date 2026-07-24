@@ -115,7 +115,24 @@ class PluginSlot extends Component {
       const element = state.root.render(node);
       nextChildren.push(element);
     }
-    this.replaceChildren(...nextChildren);
+
+    // Skip the DOM write when nothing actually changed. replaceChildren()
+    // unconditionally detaches and reattaches every child per the DOM
+    // spec's "replace all" algorithm, even when passed the exact same node
+    // references already in place — which cancels any running CSS
+    // animation/transition on them. Since state.root.render() patches
+    // same-shape trees in place (see PluginRenderer._patch), nextChildren
+    // is often referentially identical to the current children, and this
+    // guard is what makes continuous animations (e.g. a plugin moving an
+    // element via CSS transitions) actually stay continuous across
+    // frequent reconciles (context changes, refreshSlot, etc.).
+    const currentChildren = Array.from(this.childNodes);
+    const changed =
+      currentChildren.length !== nextChildren.length ||
+      currentChildren.some((child, i) => child !== nextChildren[i]);
+    if (changed) {
+      this.replaceChildren(...nextChildren);
+    }
   }
 }
 
