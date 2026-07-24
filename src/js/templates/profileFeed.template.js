@@ -6,7 +6,7 @@ import { verificationBadgeTemplate } from "/js/templates/verificationBadge.templ
 import { automatedAccountBadgeTemplate } from "/js/templates/automatedAccountBadge.template.js";
 import { richTextTemplate } from "/js/templates/richText.template.js";
 import { getDisplayName } from "/js/dataHelpers.js";
-import { classnames } from "/js/utils.js";
+import { classnames, getInteractionPosition } from "/js/utils.js";
 import "/js/components/container-link.js";
 
 // clickAction: "link" | "none" | callback
@@ -70,12 +70,16 @@ function followButtonRightItem({
   const isFollowing = !!actor.viewer?.following;
   const isFollowedBy = !!actor.viewer?.followedBy;
   return html`<button
-    @click=${() => {
+    @click=${(e) => {
       if (!profileInteractionHandler) {
         console.warn("No profileInteractionHandler provided for follow button");
         return;
       }
-      profileInteractionHandler.handleFollow(actor, !isFollowing);
+      profileInteractionHandler.handleFollow(
+        actor,
+        !isFollowing,
+        getInteractionPosition(e),
+      );
     }}
     class=${classnames(
       "rounded-button profile-following-button profile-list-item-follow",

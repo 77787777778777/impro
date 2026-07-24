@@ -300,8 +300,12 @@ class ProfileView extends View {
                   window.router.go(`/messages/${convo.id}`);
                 }
               },
-              onClickFollow: (profile, doFollow) =>
-                profileInteractionHandler.handleFollow(profile, doFollow),
+              onClickFollow: (profile, doFollow, position) =>
+                profileInteractionHandler.handleFollow(
+                  profile,
+                  doFollow,
+                  position,
+                ),
               onClickMute: (profile, doMute) =>
                 profileInteractionHandler.handleMute(profile, doMute),
               onClickBlock: async (profile, doBlock) => {

@@ -15,6 +15,7 @@ import { notificationsIconTemplate } from "/js/templates/icons/notificationsIcon
 import {
   formatLargeNumber,
   classnames,
+  getInteractionPosition,
   groupBy,
   noop,
   sortBy,
@@ -360,11 +361,11 @@ export function profileCardTemplate({
             }
           }
           return html`<button
-            @click=${() => {
+            @click=${(e) => {
               if (!isAuthenticated) {
                 return SignInModal.open();
               }
-              onClickFollow(profile, !isFollowing);
+              onClickFollow(profile, !isFollowing, getInteractionPosition(e));
             }}
             class=${classnames("rounded-button  profile-following-button", {
               "rounded-button-primary": !isFollowing,

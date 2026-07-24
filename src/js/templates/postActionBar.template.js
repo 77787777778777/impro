@@ -4,6 +4,7 @@ import { getPermalinkForPost } from "/js/navigation.js";
 import {
   formatLargeNumber,
   getBrowserLanguageCodes,
+  getInteractionPosition,
   groupBy,
   noop,
   classnames,
@@ -282,6 +283,11 @@ export function postActionBarTemplate({
   const isLiked = !!post.viewer?.like;
   const isBookmarked = !!post.viewer?.bookmarked;
   const canQuotePost = !post.viewer?.embeddingDisabled;
+  // Captured when the repost button itself is pressed (opening the
+  // context menu) and consumed when "Repost"/"Undo repost" is actually
+  // clicked inside it — the menu item's own click event has no useful
+  // position of its own (it's positioned by the menu, not the post).
+  let repostButtonPosition;
   const canReply = canReplyToPost(post);
   return html`
     <div class="post-actions">
@@ -317,6 +323,7 @@ export function postActionBarTemplate({
               if (!isAuthenticated) {
                 return SignInModal.open();
               }
+              repostButtonPosition = getInteractionPosition(e);
               const contextMenu = this.nextElementSibling;
               contextMenu.open(e.clientX, e.clientY);
             }}
@@ -337,7 +344,7 @@ export function postActionBarTemplate({
                   SignInModal.open();
                   return;
                 }
-                onClickRepost(post, !isReposted);
+                onClickRepost(post, !isReposted, repostButtonPosition);
               }}
             >
               ${isReposted ? "Undo repost" : "Repost"}
@@ -370,7 +377,7 @@ export function postActionBarTemplate({
                   SignInModal.open();
                   return;
                 }
-                onClickLike(post, !isLiked);
+                onClickLike(post, !isLiked, getInteractionPosition(e));
               }}
             >
               <div class="post-action-icon">

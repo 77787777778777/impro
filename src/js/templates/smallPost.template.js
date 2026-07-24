@@ -203,10 +203,10 @@ export function smallPostTemplate({
             onClickReply: () => {
               window.router.go(linkToPost(post));
             },
-            onClickLike: (post, doLike) =>
-              postInteractionHandler.handleLike(post, doLike),
-            onClickRepost: (post, doRepost) =>
-              postInteractionHandler.handleRepost(post, doRepost),
+            onClickLike: (post, doLike, position) =>
+              postInteractionHandler.handleLike(post, doLike, position),
+            onClickRepost: (post, doRepost, position) =>
+              postInteractionHandler.handleRepost(post, doRepost, position),
             onClickQuotePost: (post) =>
               postInteractionHandler.handleQuotePost(post),
             onClickBookmark: (post, doBookmark) =>

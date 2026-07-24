@@ -5,6 +5,7 @@ import { postHeaderTextTemplate } from "/js/templates/postHeaderText.template.js
 import { richTextTemplate } from "/js/templates/richText.template.js";
 import {
   classnames,
+  getInteractionPosition,
   graphemeCount,
   readFileAsDataUrl,
   sanitizeUri,
@@ -590,7 +591,7 @@ class PostComposer extends Component {
                 class="rounded-button rounded-button-primary"
                 data-testid="composer-submit-button"
                 data-teststate=${submitTestState}
-                @click=${() => this.send()}
+                @click=${(e) => this.send(getInteractionPosition(e))}
                 .disabled=${isSending ||
                 isAnyPostAboveCharLimit ||
                 isAnyVideoBlocking}
@@ -1312,7 +1313,7 @@ class PostComposer extends Component {
     return nonEmpty;
   }
 
-  async send() {
+  async send(position) {
     if (this.isSendBlocked()) return;
     const postsToSend = await this._buildPostsForSend();
     if (!postsToSend) return;
@@ -1348,6 +1349,7 @@ class PostComposer extends Component {
                 localRefs: [...this._originalLocalRefs],
               }
             : null,
+          position,
           successCallback,
           errorCallback,
         },

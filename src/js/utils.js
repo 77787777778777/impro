@@ -2,6 +2,23 @@ import { Capacitor } from "/js/lib/capacitor.js";
 
 export function noop() {}
 
+// Viewport-relative center of the element a DOM event originated from —
+// used to tell plugins where on screen a user-initiated action (like,
+// repost, follow, post) actually happened, so a screen-companion-style
+// plugin can react at that spot instead of a fixed location. Uses a
+// measured rect rather than event.clientX/clientY because the latter is
+// meaningless for non-pointer activation (e.g. pressing Enter/Space on a
+// focused button). Walks up from event.target (the actual clicked node)
+// rather than using event.currentTarget directly, since some listeners
+// (e.g. animated-button.js) are bound to a `display: contents` wrapper
+// element, which has no box of its own and reports an empty rect.
+export function getInteractionPosition(event) {
+  const el =
+    event.target.closest("button, a, [role='button']") ?? event.currentTarget;
+  const rect = el.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
 export function kebabCase(str) {
   return str.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }

@@ -126,19 +126,27 @@ and its return value is ignored (unlike `post-context-menu`/
 `profile-context-menu`/`post-composer-open`, which expect a menu/composer
 back). Available events:
 
-| Event                | Payload            |
-| -------------------- | ------------------ |
-| `post-liked`         | `{ uri }`          |
-| `post-unliked`       | `{ uri }`          |
-| `post-reposted`      | `{ uri }`          |
-| `post-unreposted`    | `{ uri }`          |
-| `profile-followed`   | `{ did }`          |
-| `profile-unfollowed` | `{ did }`          |
-| `post-created`       | `{ uri, isReply }` |
+| Event                | Payload                      |
+| -------------------- | ---------------------------- |
+| `post-liked`         | `{ uri, position }`          |
+| `post-unliked`       | `{ uri, position }`          |
+| `post-reposted`      | `{ uri, position }`          |
+| `post-unreposted`    | `{ uri, position }`          |
+| `profile-followed`   | `{ did, position }`          |
+| `profile-unfollowed` | `{ did, position }`          |
+| `post-created`       | `{ uri, isReply, position }` |
+
+`position` is `{ x, y }` (viewport-relative, like `getLandmarkRects()`) when
+the action was taken by clicking/tapping/activating a specific control the
+host could measure at that moment — e.g. the actual like button that was
+pressed — and `undefined` otherwise (e.g. no reliable originating element,
+or the action came from somewhere not yet wired up to report one). Treat it
+as an occasional bonus, not something every event reliably has:
 
 ```js
-this.app.on("post-liked", ({ uri }) => {
-  // react to the like
+this.app.on("post-liked", ({ uri, position }) => {
+  // e.g. move your overlay widget to `position` and react there, falling
+  // back to something generic when it's undefined
 });
 ```
 

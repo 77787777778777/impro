@@ -5,6 +5,7 @@ import {
   groupBy,
   sortBy,
   noop,
+  getInteractionPosition,
   sliceByByte,
   formatLargeNumber,
   formatFullTimestamp,
@@ -191,6 +192,60 @@ describe("noop", () => {
   it("should do nothing and return undefined", () => {
     const result = noop();
     assert.deepEqual(result, undefined);
+  });
+});
+
+describe("getInteractionPosition", () => {
+  function fireClick(target, currentTarget) {
+    const event = { target, currentTarget };
+    return getInteractionPosition(event);
+  }
+
+  it("returns the center of event.target's closest button/link ancestor", () => {
+    document.body.innerHTML =
+      '<div id="wrapper"><button id="btn"><span id="icon"></span></button></div>';
+    const button = document.getElementById("btn");
+    const icon = document.getElementById("icon");
+    button.getBoundingClientRect = () => ({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 20,
+    });
+    const result = fireClick(icon, button);
+    assert.deepEqual(result, { x: 30, y: 30 });
+  });
+
+  // animated-button.js's own click listener is bound to a `display:
+  // contents` wrapper element with no box of its own (getBoundingClientRect
+  // returns all zeros) — walking up from event.target instead of trusting
+  // currentTarget is what makes this work for that case. Regression test
+  // for a real bug: teleport-to-click-position landed at (0, 0) for every
+  // like/bookmark button before this fix.
+  it("falls back correctly through a display:contents wrapper by using event.target", () => {
+    document.body.innerHTML =
+      '<animated-button id="wrapper"><button id="btn"><span id="icon"></span></button></animated-button>';
+    const wrapper = document.getElementById("wrapper");
+    const button = document.getElementById("btn");
+    const icon = document.getElementById("icon");
+    wrapper.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0 });
+    button.getBoundingClientRect = () => ({
+      x: 100,
+      y: 200,
+      width: 50,
+      height: 30,
+    });
+    const result = fireClick(icon, wrapper);
+    assert.deepEqual(result, { x: 125, y: 215 });
+  });
+
+  it("falls back to currentTarget when target has no button/link ancestor", () => {
+    document.body.innerHTML = '<div id="host"><span id="child"></span></div>';
+    const host = document.getElementById("host");
+    const child = document.getElementById("child");
+    host.getBoundingClientRect = () => ({ x: 5, y: 5, width: 10, height: 10 });
+    const result = fireClick(child, host);
+    assert.deepEqual(result, { x: 10, y: 10 });
   });
 });
 
