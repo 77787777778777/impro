@@ -15,16 +15,23 @@ function loggedOutHandler(name) {
 }
 
 export class InteractionHandlers {
-  constructor({ session, dataLayer, postComposerService, reportService }) {
+  constructor({
+    session,
+    dataLayer,
+    postComposerService,
+    reportService,
+    pluginService,
+  }) {
     this.postInteractionHandler = session
       ? new PostInteractionHandler(
           dataLayer,
           postComposerService,
           reportService,
+          pluginService,
         )
       : loggedOutHandler("postInteractionHandler");
     this.profileInteractionHandler = session
-      ? new ProfileInteractionHandler(dataLayer, reportService)
+      ? new ProfileInteractionHandler(dataLayer, reportService, pluginService)
       : loggedOutHandler("profileInteractionHandler");
     this.feedInteractionHandler = session
       ? new FeedInteractionHandler(dataLayer)

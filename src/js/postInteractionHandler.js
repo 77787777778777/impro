@@ -4,17 +4,22 @@ import { confirmModal } from "/js/modals/confirm.modal.js";
 import { trashCanIconTemplate } from "/js/templates/icons/trashCanIcon.template.js";
 
 export class PostInteractionHandler {
-  constructor(dataLayer, postComposerService, reportService) {
+  constructor(dataLayer, postComposerService, reportService, pluginService) {
     this.dataLayer = dataLayer;
     this.postComposerService = postComposerService;
     this.reportService = reportService;
+    this.pluginService = pluginService;
   }
 
-  async handleLike(post, doLike) {
+  async handleLike(post, doLike, position) {
     if (doLike) {
       try {
         hapticsImpactMedium();
         await this.dataLayer.mutations.addLike(post);
+        this.pluginService.broadcastEvent("post-liked", {
+          uri: post.uri,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to like post", { style: "error" });
@@ -22,6 +27,10 @@ export class PostInteractionHandler {
     } else {
       try {
         await this.dataLayer.mutations.removeLike(post);
+        this.pluginService.broadcastEvent("post-unliked", {
+          uri: post.uri,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to unlike post", { style: "error" });
@@ -29,11 +38,15 @@ export class PostInteractionHandler {
     }
   }
 
-  async handleRepost(post, doRepost) {
+  async handleRepost(post, doRepost, position) {
     if (doRepost) {
       try {
         hapticsImpactMedium();
         await this.dataLayer.mutations.createRepost(post);
+        this.pluginService.broadcastEvent("post-reposted", {
+          uri: post.uri,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to repost post", { style: "error" });
@@ -41,6 +54,10 @@ export class PostInteractionHandler {
     } else {
       try {
         await this.dataLayer.mutations.deleteRepost(post);
+        this.pluginService.broadcastEvent("post-unreposted", {
+          uri: post.uri,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to delete repost", { style: "error" });

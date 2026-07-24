@@ -48,6 +48,18 @@ async function dispatchEvent(event, args) {
       await invokeListeners(listeners, event, [composer, ...args]);
       return composer._serialize();
     }
+    // One-way notifications: the host just tells listeners something
+    // happened, no return value is serialized back.
+    case "post-liked":
+    case "post-unliked":
+    case "post-reposted":
+    case "post-unreposted":
+    case "profile-followed":
+    case "profile-unfollowed":
+    case "post-created": {
+      await invokeListeners(listeners, event, args);
+      return null;
+    }
     default:
       console.warn(`No dispatch case for plugin event "${event}".`);
       return null;

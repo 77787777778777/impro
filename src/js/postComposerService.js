@@ -49,6 +49,7 @@ export class PostComposerService {
           threadgateAllow,
           postgateEmbeddingRules,
           draft,
+          position,
           successCallback,
           errorCallback,
         } = e.detail;
@@ -59,6 +60,11 @@ export class PostComposerService {
             replyRoot: sendReplyRoot,
             threadgateAllow,
             postgateEmbeddingRules,
+          });
+          this.pluginService.broadcastEvent("post-created", {
+            uri: res.uris[0],
+            isReply: Boolean(sendReplyTo),
+            position,
           });
           let toastMessage = "Your post was sent";
           if (posts.length > 1) {

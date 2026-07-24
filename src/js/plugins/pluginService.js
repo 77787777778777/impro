@@ -1035,6 +1035,20 @@ export class PluginService extends ReactiveStore {
     return { text, cursor };
   }
 
+  // One-way fire-and-forget broadcast to every plugin listening for `event`
+  // via `this.app.on(event, ...)`. Unlike _collectContextMenuItems/
+  // getPostComposerInit, callers here don't want a return value aggregated,
+  // just delivery — errors are caught and logged per-plugin.
+  broadcastEvent(event, ...args) {
+    const listeners = this.registries.eventListeners.get(event);
+    if (!listeners || listeners.size === 0) return;
+    for (const [pluginId, handler] of listeners) {
+      Promise.resolve(handler(...args)).catch((error) => {
+        console.error(`Plugin ${pluginId} ${event} handler failed:`, error);
+      });
+    }
+  }
+
   async _collectContextMenuItems(event, target, meta = null) {
     const listeners = this.registries.eventListeners.get(event);
     if (!listeners || listeners.size === 0) return [];

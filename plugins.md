@@ -40,6 +40,10 @@ Plugins are currently in **beta** as the API surface is being expanded. However,
 - Show a persistent widget on top of every screen, regardless of route, via
   the `"overlay"` slot (requires the `ui: ["overlay"]` permission) — see
   "Persistent overlay" below
+- React to actions the user takes (liking/reposting a post, following a
+  profile, publishing a post) via `this.app.on(event, listener)`, and to
+  what's currently on screen via the overlay slot's `context.page`/
+  `context.notifications` — see "Reacting to app activity" below
 - Add custom feed filters
 - Transform rich text in posts
 - Make whitelisted network requests (requires permissions)
@@ -113,3 +117,47 @@ widget doesn't block clicks elsewhere in the app; opt individual interactive
 elements back in with your own CSS (`pointer-events: auto`). If multiple
 plugins register the overlay slot, they're simply stacked as siblings in
 registration order — pick an unobtrusive corner and keep your footprint small.
+
+### Reacting to app activity
+
+**Actions the user takes** are delivered as one-way events via
+`this.app.on(event, listener)` — the listener receives a plain payload object
+and its return value is ignored (unlike `post-context-menu`/
+`profile-context-menu`/`post-composer-open`, which expect a menu/composer
+back). Available events:
+
+| Event                | Payload            |
+| -------------------- | ------------------ |
+| `post-liked`         | `{ uri }`          |
+| `post-unliked`       | `{ uri }`          |
+| `post-reposted`      | `{ uri }`          |
+| `post-unreposted`    | `{ uri }`          |
+| `profile-followed`   | `{ did }`          |
+| `profile-unfollowed` | `{ did }`          |
+| `post-created`       | `{ uri, isReply }` |
+
+```js
+this.app.on("post-liked", ({ uri }) => {
+  // react to the like
+});
+```
+
+**What's on screen** is available to the overlay slot's callback as its
+`context` argument, refreshed automatically whenever it changes:
+`context.page` (a coarse category — `"home"`, `"notifications"`, `"chat"`,
+`"thread"`, `"profile"`, `"settings"`, `"discover"`, or `"other"`) and
+`context.notifications` (the current unread-notifications count, as a
+string — parse with `Number()`).
+
+**Re-rendering on your own schedule**: `registerSlot`'s callback is normally
+only re-invoked when the slot's registration set changes, or (for the
+overlay slot) when `context.page`/`context.notifications` change. To update
+what's showing at any other time — e.g. an ambient idle animation, or a
+timed reaction to one of the events above — call `this.refreshSlot(name)`,
+which forces every plugin currently registered for that slot to re-invoke
+its callback:
+
+```js
+this._mood = "happy";
+this.refreshSlot("overlay");
+```

@@ -126,6 +126,7 @@ export async function main() {
     dataLayer,
     postComposerService,
     reportService,
+    pluginService,
   });
 
   // Precache author DIDs when data is set in the data store.

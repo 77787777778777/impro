@@ -5,18 +5,23 @@ import { getDisplayName } from "/js/dataHelpers.js";
 import "/js/components/post-notifications-dialog.js";
 
 export class ProfileInteractionHandler {
-  constructor(dataLayer, reportService) {
+  constructor(dataLayer, reportService, pluginService) {
     this.dataLayer = dataLayer;
     this.reportService = reportService;
+    this.pluginService = pluginService;
     this._postNotificationsDialog = null;
   }
 
-  async handleFollow(profile, doFollow) {
+  async handleFollow(profile, doFollow, position) {
     if (doFollow) {
       try {
         hapticsImpactMedium();
         await this.dataLayer.mutations.followProfile(profile);
         showToast(`Following ${getDisplayName(profile)}`);
+        this.pluginService.broadcastEvent("profile-followed", {
+          did: profile.did,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to follow account", { style: "error" });
@@ -25,6 +30,10 @@ export class ProfileInteractionHandler {
       try {
         await this.dataLayer.mutations.unfollowProfile(profile);
         showToast(`No longer following ${getDisplayName(profile)}`);
+        this.pluginService.broadcastEvent("profile-unfollowed", {
+          did: profile.did,
+          position,
+        });
       } catch (error) {
         console.error(error);
         showToast("Failed to unfollow account", { style: "error" });

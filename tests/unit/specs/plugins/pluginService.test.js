@@ -1398,6 +1398,55 @@ describe("refreshSlot host method", () => {
   });
 });
 
+describe("broadcastEvent", () => {
+  function addListener(service, event, pluginId, handler) {
+    let listeners = service.registries.eventListeners.get(event);
+    if (!listeners) {
+      listeners = new Map();
+      service.registries.eventListeners.set(event, listeners);
+    }
+    listeners.set(pluginId, handler);
+  }
+
+  it("does nothing when no listeners are registered", () => {
+    const { service } = makeService();
+    assert.doesNotThrow(() =>
+      service.broadcastEvent("post-liked", { uri: "x" }),
+    );
+  });
+
+  it("invokes every registered listener with the given args", async () => {
+    const { service } = makeService();
+    const calls = [];
+    addListener(service, "post-liked", "alpha", (payload) => {
+      calls.push({ pluginId: "alpha", payload });
+    });
+    addListener(service, "post-liked", "beta", (payload) => {
+      calls.push({ pluginId: "beta", payload });
+    });
+    service.broadcastEvent("post-liked", { uri: "at://test" });
+    // handler invocations are synchronous; only the .catch chaining is async
+    assert.deepEqual(calls, [
+      { pluginId: "alpha", payload: { uri: "at://test" } },
+      { pluginId: "beta", payload: { uri: "at://test" } },
+    ]);
+  });
+
+  it("catches a rejecting listener without affecting others", async () => {
+    const { service } = makeService();
+    const calls = [];
+    addListener(service, "post-liked", "broken", async () => {
+      throw new Error("boom");
+    });
+    addListener(service, "post-liked", "ok", (payload) => {
+      calls.push(payload);
+    });
+    service.broadcastEvent("post-liked", { uri: "at://test" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls, [{ uri: "at://test" }]);
+  });
+});
+
 describe("app.data host methods", () => {
   function makeServiceWithRealBridge() {
     const { provider } = makeProvider();
