@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPost } from "../shared/factories.js";
 import { bskyLabeler, userProfile } from "./testData.js";
 import {
@@ -6,6 +8,9 @@ import {
   TEST_PLUGIN_RAW_MANIFEST,
   getTestPluginSource,
 } from "./testPlugin.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TEST_SPRITE_PATH = path.resolve(__dirname, "fixtures", "test-sprite.png");
 
 export class MockServer {
   constructor() {
@@ -86,6 +91,7 @@ export class MockServer {
     // Override the source served for the local test plugin's main.js; defaults
     // to the standard fixture when null.
     this.localPluginSource = null;
+    this.localPluginManifest = null;
     this.registryEntries = [];
     this.liveManifest = null;
     // README markdown served for plugin repos; set to null to simulate a
@@ -560,7 +566,9 @@ export class MockServer {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(TEST_PLUGIN_RAW_MANIFEST),
+          body: JSON.stringify(
+            this.localPluginManifest ?? TEST_PLUGIN_RAW_MANIFEST,
+          ),
         }),
     );
     await page.route(`**/plugins-local/${TEST_PLUGIN_ID}/main.js`, (route) =>
@@ -569,6 +577,12 @@ export class MockServer {
         contentType: "text/javascript",
         body: this.localPluginSource ?? getTestPluginSource(),
       }),
+    );
+    // Plugin-declared bitmap assets (manifest.images), served from disk —
+    // see tests/e2e/fixtures/test-sprite.png.
+    await page.route(
+      `**/plugins-local/${TEST_PLUGIN_ID}/assets/test-sprite.png`,
+      (route) => route.fulfill({ path: TEST_SPRITE_PATH }),
     );
 
     // Remote plugin registry routes — serve a fake registry and matching
