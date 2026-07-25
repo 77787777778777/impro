@@ -1,11 +1,8 @@
 import { html, render } from "/js/lib/lit-html.js";
 import { Component } from "/js/components/component.js";
 import { scrollLocks } from "/js/scrollLocks.js";
-import {
-  closeWithAnimation,
-  enableDragToDismiss,
-  resetScrollOnBlur,
-} from "/js/dialogHelpers.js";
+import { closeWithAnimation, resetScrollOnBlur } from "/js/dialogHelpers.js";
+import { enableDragToDismiss } from "/js/dragHelpers.js";
 import { classnames, graphemeCount, readFileAsDataUrl } from "/js/utils.js";
 import { ImageCompressor } from "/js/imageCompressor.js";
 import "/js/components/image-cropper.js";
@@ -199,6 +196,7 @@ class CreateListDialog extends Component {
                   <context-menu-item-group>
                     <context-menu-item
                       data-testid="menu-action-list-avatar-upload"
+                      icon="image-line"
                       @click=${() => this._pickImage()}
                     >
                       Upload from Files
@@ -208,6 +206,7 @@ class CreateListDialog extends Component {
                     ? html`<context-menu-item-group>
                         <context-menu-item
                           data-testid="menu-action-list-avatar-remove"
+                          icon="delete-bin-line"
                           @click=${() => {
                             this._newAvatarDataUrl = null;
                             this.render();
@@ -425,7 +424,7 @@ class CreateListDialog extends Component {
       this.querySelector("#create-list-name")?.focus({ preventScroll: true });
       enableDragToDismiss(dialog, {
         confirmDismiss: () => this.confirmClose(),
-        onClose: () => this.close(),
+        onDismiss: () => this.close(),
         scrollContainer: this.querySelector(".form-dialog-content"),
         ignoreTouchTarget: (el) =>
           !!el.closest("button") ||

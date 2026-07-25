@@ -9,14 +9,15 @@ import { auth } from "/js/auth.js";
 import { headerTemplate } from "/js/templates/header.template.js";
 import "/js/components/tab-bar.js";
 import { pinIconTemplate } from "/js/templates/icons/pinIcon.template.js";
-import { plusIconTemplate } from "/js/templates/icons/plusIcon.template.js";
+import { userPlusIconTemplate } from "/js/templates/icons/userPlusIcon.template.js";
 import { richTextTemplate } from "/js/templates/richText.template.js";
-import { pageEffect } from "/js/router.js";
+import { bindToPage, pageEffect } from "/js/router.js";
 import { FEED_PAGE_SIZE } from "/js/config.js";
 import { showToast } from "/js/toasts.js";
 import "/js/components/infinite-scroll-container.js";
 import "/js/components/context-menu.js";
 import "/js/components/context-menu-item.js";
+import "/js/components/context-menu-item-group.js";
 import "/js/components/edit-list-details-dialog.js";
 import "/js/components/manage-list-members-dialog.js";
 
@@ -88,12 +89,14 @@ class ListDetailView extends View {
         <context-menu>
           <context-menu-item
             data-testid="menu-action-list-mute"
+            icon="speaker-slash-line"
             @click=${() => listInteractionHandler.handleMuteList(list)}
           >
             Mute accounts
           </context-menu-item>
           <context-menu-item
             data-testid="menu-action-list-block"
+            icon="user-x-line"
             @click=${() => listInteractionHandler.handleBlockList(list)}
           >
             Block accounts
@@ -156,44 +159,53 @@ class ListDetailView extends View {
                     <span>...</span>
                   </button>
                   <context-menu>
-                    <context-menu-item
-                      data-testid="menu-action-list-open-in-bsky"
-                      @click=${() => {
-                        window.open(listPermalink, "_blank");
-                      }}
-                    >
-                      Open in bsky.app
-                    </context-menu-item>
-                    <context-menu-item
-                      data-testid="menu-action-list-copy-link"
-                      @click=${() => {
-                        navigator.clipboard.writeText(listPermalink);
-                        showToast("Link copied to clipboard", {
-                          style: "success",
-                        });
-                      }}
-                    >
-                      Copy link to list
-                    </context-menu-item>
+                    <context-menu-item-group>
+                      <context-menu-item
+                        data-testid="menu-action-list-open-in-bsky"
+                        icon="open-line"
+                        @click=${() => {
+                          window.open(listPermalink, "_blank");
+                        }}
+                      >
+                        Open in bsky.app
+                      </context-menu-item>
+                      <context-menu-item
+                        data-testid="menu-action-list-copy-link"
+                        icon="link-line"
+                        @click=${() => {
+                          navigator.clipboard.writeText(listPermalink);
+                          showToast("Link copied to clipboard", {
+                            style: "success",
+                          });
+                        }}
+                      >
+                        Copy link to list
+                      </context-menu-item>
+                    </context-menu-item-group>
                     ${isCurrentUserList
                       ? html`<context-menu-item
                             data-testid="menu-action-list-add-people"
+                            icon="user-plus-line"
                             @click=${() => handleAddPeople(list)}
                           >
                             Add people to list
                           </context-menu-item>
-                          <context-menu-item
-                            data-testid="menu-action-list-edit"
-                            @click=${() => handleEditList(list)}
-                          >
-                            Edit list details
-                          </context-menu-item>
-                          <context-menu-item
-                            data-testid="menu-action-list-delete"
-                            @click=${() => handleDeleteList(list)}
-                          >
-                            Delete list
-                          </context-menu-item>`
+                          <context-menu-item-group>
+                            <context-menu-item
+                              data-testid="menu-action-list-edit"
+                              icon="edit-pen-2-line"
+                              @click=${() => handleEditList(list)}
+                            >
+                              Edit list details
+                            </context-menu-item>
+                            <context-menu-item
+                              data-testid="menu-action-list-delete"
+                              icon="delete-bin-line"
+                              @click=${() => handleDeleteList(list)}
+                            >
+                              Delete list
+                            </context-menu-item>
+                          </context-menu-item-group>`
                       : ""}
                   </context-menu>
                 `
@@ -296,7 +308,7 @@ class ListDetailView extends View {
                               data-testid="list-empty-add-people-button"
                               @click=${() => handleAddPeople(list)}
                             >
-                              ${plusIconTemplate()} Add people to list
+                              ${userPlusIconTemplate()} Add people to list
                             </button>`
                           : ""}
                       </div>`
@@ -318,7 +330,7 @@ class ListDetailView extends View {
                               data-testid="list-empty-add-people-button"
                               @click=${() => handleAddPeople(list)}
                             >
-                              ${plusIconTemplate()} Add people to list
+                              ${userPlusIconTemplate()} Add people to list
                             </button>`
                           : ""}
                       </div>`}
@@ -342,8 +354,18 @@ class ListDetailView extends View {
       const dialog = document.createElement("manage-list-members-dialog");
       dialog.dataLayer = dataLayer;
       dialog.list = list;
+      let reloadTimeout = null;
       dialog.addEventListener("dialog-closed", () => {
+        clearTimeout(reloadTimeout);
         dialog.remove();
+      });
+      dialog.addEventListener("members-changed", () => {
+        if (isModerationList(list) || userHasScrolled) return;
+        clearTimeout(reloadTimeout);
+        reloadTimeout = setTimeout(() => {
+          if (userHasScrolled) return;
+          loadFeed({ reload: true });
+        }, 1000); // 1 sec delay for appview update
       });
       root.querySelector("main").appendChild(dialog);
       dialog.open();
@@ -380,25 +402,37 @@ class ListDetailView extends View {
       await dataLayer.requests.loadListMembers(listUri, { reload });
     }
 
+    async function loadListAndFeeds({ reload = false } = {}) {
+      const list = await dataLayer.declarative.ensureList(listUri);
+      const requests = [loadMembers({ reload })];
+      if (!isModerationList(list)) {
+        requests.push(loadFeed({ reload }));
+      }
+      await Promise.all(requests);
+    }
+
+    let userHasScrolled = false;
+    const markUserScrolled = () => {
+      userHasScrolled = true;
+    };
+    bindToPage(root, window, "touchmove", markUserScrolled);
+    bindToPage(root, window, "wheel", markUserScrolled);
+    bindToPage(root, window, "keydown", markUserScrolled);
+
     root.addEventListener("page-enter", async () => {
-      await Promise.all([
-        dataLayer.declarative.ensureList(listUri),
-        loadFeed(),
-        loadMembers(),
-      ]);
+      userHasScrolled = false;
+      await loadListAndFeeds();
     });
 
     root.addEventListener("page-restore", async (e) => {
+      userHasScrolled = false;
       const scrollY = e.detail?.scrollY ?? 0;
       const isBack = e.detail?.isBack ?? false;
       if (isBack) {
         window.scrollTo(0, scrollY);
       } else {
         window.scrollTo(0, 0);
-        await Promise.all([
-          loadFeed({ reload: true }),
-          loadMembers({ reload: true }),
-        ]);
+        await loadListAndFeeds({ reload: true });
       }
     });
   }

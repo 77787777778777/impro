@@ -115,6 +115,7 @@ function profileContextMenuTemplate({
     <context-menu-item-group>
       <context-menu-item
         data-testid="menu-action-profile-open-in-bsky"
+        icon="open-line"
         @click=${() => {
           window.open(getBlueskyLinkForProfile(profile), "_blank");
         }}
@@ -123,6 +124,7 @@ function profileContextMenuTemplate({
       </context-menu-item>
       <context-menu-item
         data-testid="menu-action-profile-copy-link"
+        icon="link-line"
         @click=${() => {
           navigator.clipboard.writeText(getPermalinkForProfile(profile));
           showToast("Link copied to clipboard", { style: "success" });
@@ -135,6 +137,7 @@ function profileContextMenuTemplate({
       ? html`
           <context-menu-item
             data-testid="menu-action-profile-search-posts"
+            icon="search-line"
             @click=${() => {
               router.go(linkToSearchPostsByProfile(profile));
             }}
@@ -150,6 +153,7 @@ function profileContextMenuTemplate({
                 <context-menu-item
                   data-testid="menu-action-profile-follow"
                   data-teststate=${isFollowing ? "following" : "not-following"}
+                  icon=${isFollowing ? "user-minus-line" : "user-plus-line"}
                   @click=${() => {
                     onClickFollow(profile, !isFollowing);
                   }}
@@ -161,6 +165,7 @@ function profileContextMenuTemplate({
           <context-menu-item-group>
             <context-menu-item
               data-testid="menu-action-profile-add-to-lists"
+              icon="checkbox-list-line"
               @click=${() => {
                 onClickAddToLists(profile);
               }}
@@ -170,6 +175,9 @@ function profileContextMenuTemplate({
             <context-menu-item
               data-testid="menu-action-profile-mute"
               data-teststate=${profile.viewer?.muted ? "muted" : "unmuted"}
+              icon=${profile.viewer?.muted
+                ? "speaker-volume-line"
+                : "speaker-slash-line"}
               @click=${() => {
                 onClickMute(profile, !profile.viewer?.muted);
               }}
@@ -181,6 +189,9 @@ function profileContextMenuTemplate({
               data-teststate=${profile.viewer?.blocking
                 ? "blocking"
                 : "not-blocking"}
+              icon=${profile.viewer?.blocking
+                ? "user-check-line"
+                : "user-x-line"}
               @click=${() => {
                 onClickBlock(profile, !profile.viewer?.blocking);
               }}
@@ -189,6 +200,7 @@ function profileContextMenuTemplate({
             </context-menu-item>
             <context-menu-item
               data-testid="menu-action-profile-report"
+              icon="flag-line"
               @click=${() => {
                 onClickReport(profile);
               }}
@@ -203,7 +215,10 @@ function profileContextMenuTemplate({
         <context-menu-item-group>
           ${group.map(
             (item) => html`
-              <context-menu-item @click=${() => item.invoke()}>
+              <context-menu-item
+                .iconElement=${item.iconElement}
+                @click=${() => item.invoke()}
+              >
                 ${item.title}
               </context-menu-item>
             `,

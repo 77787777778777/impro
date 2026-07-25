@@ -142,7 +142,7 @@ export class PermissionsDeclinedError extends Error {
 }
 
 export class PluginService extends ReactiveStore {
-  constructor(preferencesProvider, session) {
+  constructor(preferencesProvider, session, dataLayer, hiddenFeedItemsStore) {
     super("pluginService");
     this.slingshot = new Slingshot();
     this.registries = {
@@ -186,7 +186,6 @@ export class PluginService extends ReactiveStore {
         hasSettings: this.$settingTabs.get(entry.id) !== null,
       }));
     });
-    this.$pluginFilteredFeedItems = new SignalMap();
     // Bumped whenever a transform registers/unregisters
     this.$richTextTransformsVersion = new Signal.State(0);
     this._richTextTokensCache = new Map();
@@ -220,25 +219,48 @@ export class PluginService extends ReactiveStore {
     );
     this.session = session;
     this.isPreviewMode = false;
-    this._renderContext = null;
-    this._dataLayer = null;
+    this._dataLayer = dataLayer;
+    this._hiddenFeedItemsStore = hiddenFeedItemsStore;
     this._setupRegistries();
     this._setupHostMethods();
+    this._setupFeedFilterIntegration();
   }
 
-  setRenderContext(renderContext) {
-    this._renderContext = renderContext;
-  }
-
-  setDataLayer(dataLayer) {
-    this._dataLayer = dataLayer;
+  _setupFeedFilterIntegration() {
+    this._dataLayer.on("feedLoaded", async ({ feedURI, feed, reload }) => {
+      const overrides = await this.getFilteredFeedItems(feedURI, feed);
+      if (reload) {
+        this._hiddenFeedItemsStore.replace(feedURI, overrides);
+      } else {
+        this._hiddenFeedItemsStore.merge(feedURI, overrides);
+      }
+    });
   }
 
   getRenderer(pluginId) {
-    if (!this._renderContext) {
-      throw new Error("Render context not loaded");
+    return new PluginRenderer(this.pluginBridge, pluginId, this);
+  }
+
+  // icon can be string | VirtualEl
+  // if string, render an app-icon, if VirtualEl, render to DOM node
+  _createIconElement(pluginId, icon) {
+    if (icon == null) return null;
+    if (typeof icon === "string") {
+      const el = document.createElement("app-icon");
+      el.setAttribute("icon", icon);
+      return el;
     }
-    return new PluginRenderer(this.pluginBridge, pluginId, this._renderContext);
+    if (typeof icon === "object") {
+      try {
+        const el = this.getRenderer(pluginId).createRoot().render(icon);
+        el.classList.add("plugin-icon");
+        return el;
+      } catch (error) {
+        console.warn(`Plugin ${pluginId} icon render failed:`, error);
+        return null;
+      }
+    }
+    return null;
   }
 
   _setupRegistries() {
@@ -248,6 +270,7 @@ export class PluginService extends ReactiveStore {
         const entry = {
           pluginId: plugin.pluginId,
           icon: message.icon,
+          iconElement: this._createIconElement(plugin.pluginId, message.icon),
           title: message.title,
           invoke: () => plugin.call(message.handlerId),
         };
@@ -379,7 +402,7 @@ export class PluginService extends ReactiveStore {
     this.pluginBridge.addHostMethod(
       "refreshFeedFilters",
       (plugin, feedURI = null) => {
-        this.emit("feedFiltersRefresh", { pluginId: plugin.pluginId, feedURI });
+        this.refreshFeedFilters(feedURI);
       },
     );
 
@@ -554,7 +577,6 @@ export class PluginService extends ReactiveStore {
     );
 
     this.pluginBridge.addHostMethod("getPost", async (plugin, { uri }) => {
-      if (!this._dataLayer) return null;
       try {
         return await this._dataLayer.declarative.ensurePost(uri);
       } catch {
@@ -563,7 +585,6 @@ export class PluginService extends ReactiveStore {
     });
 
     this.pluginBridge.addHostMethod("getProfile", async (plugin, { did }) => {
-      if (!this._dataLayer) return null;
       const profile = this._dataLayer.derived.$hydratedProfiles.get(did);
       if (profile) return profile;
       try {
@@ -577,7 +598,6 @@ export class PluginService extends ReactiveStore {
     this.pluginBridge.addHostMethod(
       "getDetailedProfile",
       async (plugin, { did }) => {
-        if (!this._dataLayer) return null;
         try {
           return await this._dataLayer.declarative.ensureDetailedProfile(did);
         } catch {
@@ -593,7 +613,6 @@ export class PluginService extends ReactiveStore {
     this.pluginBridge.addHostMethod(
       "getKnownFollowers",
       async (plugin, { did }) => {
-        if (!this._dataLayer) return null;
         try {
           return await this._dataLayer.declarative.ensureKnownFollowers(did);
         } catch {
@@ -634,7 +653,7 @@ export class PluginService extends ReactiveStore {
         this._requireSignedIn();
         this._requireActionPermission(plugin, "mute");
         requireHostMethodArg("muteActor", "did", did);
-        const profile = this._resolveProfileForMutation(did);
+        const profile = await this._dataLayer.declarative.ensureProfile(did);
         if (mute) await this._dataLayer.mutations.muteProfile(profile);
         else await this._dataLayer.mutations.unmuteProfile(profile);
       },
@@ -646,7 +665,7 @@ export class PluginService extends ReactiveStore {
         this._requireSignedIn();
         this._requireActionPermission(plugin, "block");
         requireHostMethodArg("blockActor", "did", did);
-        const profile = this._resolveProfileForMutation(did);
+        const profile = await this._dataLayer.declarative.ensureProfile(did);
         if (block) await this._dataLayer.mutations.blockProfile(profile);
         else await this._dataLayer.mutations.unblockProfile(profile);
       },
@@ -767,7 +786,7 @@ export class PluginService extends ReactiveStore {
   }
 
   _requireSignedIn() {
-    if (!this._dataLayer) throw new Error("Not signed in");
+    if (!this.session) throw new Error("Not signed in");
   }
 
   _requireActionPermission(plugin, action) {
@@ -1328,15 +1347,19 @@ export class PluginService extends ReactiveStore {
         try {
           const items =
             meta != null ? await handler(target, meta) : await handler(target);
-          return (items ?? []).map((item) => ({
-            pluginId,
-            icon: item.icon,
-            title: item.title,
-            invoke: () =>
-              this.pluginBridge
-                .getInstance(pluginId)
-                .call(item.handlerId, target),
-          }));
+          return (items ?? []).map((item) => {
+            const entry = {
+              pluginId,
+              icon: item.icon,
+              iconElement: this._createIconElement(pluginId, item.icon),
+              title: item.title,
+              invoke: () =>
+                this.pluginBridge
+                  .getInstance(pluginId)
+                  .call(item.handlerId, target),
+            };
+            return entry;
+          });
         } catch (error) {
           console.error(`Plugin ${pluginId} ${event} handler failed:`, error);
           return [];
@@ -1371,12 +1394,18 @@ export class PluginService extends ReactiveStore {
     return filteredFeedItems;
   }
 
-  async refreshFiltersForFeed(feedURI, feed, { reload = false } = {}) {
-    const filtered = await this.getFilteredFeedItems(feedURI, feed);
-    const existing = reload
-      ? {}
-      : (this.$pluginFilteredFeedItems.get(feedURI) ?? {});
-    this.$pluginFilteredFeedItems.set(feedURI, { ...existing, ...filtered });
+  async refreshFeedFilters(feedURI = null) {
+    const feedURIs = feedURI
+      ? [feedURI]
+      : Array.from(this._dataLayer.dataStore.$feeds.keys());
+    await Promise.all(
+      feedURIs.map(async (uri) => {
+        const feed = this._dataLayer.dataStore.$feeds.get(uri);
+        if (!feed) return;
+        const overrides = await this.getFilteredFeedItems(uri, feed);
+        this._hiddenFeedItemsStore.replace(uri, overrides);
+      }),
+    );
   }
 
   // Rich-text transform pipeline

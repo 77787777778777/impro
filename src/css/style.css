@@ -332,6 +332,10 @@ video {
   display: none;
 }
 
+context-provider {
+  display: contents;
+}
+
 @media (max-width: 799px) {
   .view-column-center main {
     padding-bottom: calc(var(--footer-height) + var(--safe-area-inset-bottom));
@@ -1036,7 +1040,8 @@ tab-bar:not([full-width]) {
 }
 
 .sidebar {
-  display: block;
+  display: flex;
+  justify-content: flex-end;
   position: fixed;
   top: 0;
   left: 0;
@@ -1054,6 +1059,14 @@ tab-bar:not([full-width]) {
   transform: translateX(-100%);
   transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   overflow-y: auto;
+}
+
+@media (max-width: 799px) {
+  .sidebar > .sidebar-content {
+    width: var(--sidebar-max-width);
+    max-width: 100%;
+    flex: 0 0 auto;
+  }
 }
 
 @media (min-width: 800px) {
@@ -1274,14 +1287,14 @@ tab-bar:not([full-width]) {
   stroke: var(--text-color);
 }
 
-plugin-icon {
+app-icon {
   display: inline-flex;
   width: 1em;
   height: 1em;
   color: inherit;
 }
 
-plugin-icon svg {
+app-icon svg {
   width: 100%;
   height: 100%;
 }
@@ -1303,7 +1316,8 @@ plugin-blob-image .blob-image-fallback {
   color: var(--text-color-muted);
 }
 
-.sidebar-nav-icon plugin-icon {
+.sidebar-nav-icon app-icon,
+.sidebar-nav-icon > .plugin-icon {
   width: 25px;
   height: 25px;
   color: var(--text-color);
@@ -2057,12 +2071,6 @@ container-link {
     padding: 0;
     border-bottom: var(--hair) solid var(--post-border-color);
     z-index: 0;
-  }
-}
-
-@media (hover: hover) {
-  .post-thread-reply-prompt:hover {
-    background-color: var(--post-hover-color);
   }
 }
 
@@ -5874,7 +5882,7 @@ button.profile-list-item-button.is-disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 32px auto 0;
+  margin: 0 auto;
 }
 
 .feeds-list-item .pin-feed-button svg {
@@ -6589,20 +6597,10 @@ button.profile-list-item-button.is-disabled {
   inset: 0;
 }
 
-@media (min-width: 800px) {
-  .context-menu-container.open {
-    position: relative;
-    inset: auto;
-  }
-}
-
 .context-menu {
   z-index: var(--context-menu-z-index);
   background-color: var(--background-color);
-  padding-top: 16px;
-  padding-left: 16px;
-  padding-right: 16px;
-  padding-bottom: calc(var(--safe-area-inset-bottom) + 16px);
+  padding: 16px 16px calc(var(--safe-area-inset-bottom) + 16px);
   touch-action: pan-y;
   max-height: 90dvh;
   overflow-y: auto;
@@ -6613,65 +6611,30 @@ button.profile-list-item-button.is-disabled {
   animation: fade-in 0.25s ease-out;
 }
 
-@media (min-width: 800px) {
-  .context-menu::backdrop {
-    background-color: transparent;
-    animation: none;
-  }
+.context-menu-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color-muted);
+  white-space: nowrap;
+  padding: 4px 0 8px;
+}
+
+context-menu-item,
+context-menu-item-group {
+  display: block;
+  color: var(--text-color);
+}
+
+context-menu-item {
+  margin-bottom: 12px;
+  white-space: nowrap;
 }
 
 context-menu-item:last-child {
   margin-bottom: 0;
 }
 
-context-menu-item:last-child .context-menu-item {
-  margin-bottom: 0;
-}
-
-.context-menu-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-color-muted);
-  white-space: nowrap;
-  padding-bottom: 8px;
-  padding-top: 4px;
-}
-
-@media (min-width: 800px) {
-  .context-menu-label {
-    padding: 12px 14px 4px;
-    font-size: inherit;
-    font-weight: normal;
-    color: var(--text-color-muted);
-  }
-}
-
-.context-menu-item {
-  margin-bottom: 12px;
-  white-space: nowrap;
-  color: var(--text-color);
-  width: 100%;
-}
-
-.context-menu-item-group {
-  border: var(--hair) solid var(--post-border-color);
-  border-radius: var(--context-menu-item-group-border-radius);
-  overflow: hidden;
-}
-
-context-menu-item-group:not(:last-child) .context-menu-item-group {
-  margin-bottom: 12px;
-}
-
-.context-menu-item-group .context-menu-item {
-  margin-bottom: 0;
-}
-
-.context-menu-item-group context-menu-item:not(:last-child) .context-menu-item {
-  border-bottom: var(--hair) solid var(--post-border-color);
-}
-
-.context-menu-item button {
+context-menu-item > button {
   width: 100%;
   border: var(--hair) solid var(--post-border-color);
   background-color: light-dark(var(--off-white), var(--gray));
@@ -6679,17 +6642,81 @@ context-menu-item-group:not(:last-child) .context-menu-item-group {
   text-align: left;
   color: inherit;
   cursor: pointer;
-  flex: 1;
   padding: 14px;
   border-radius: var(--context-menu-button-radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.context-menu-item-group .context-menu-item button {
-  border-radius: 0;
+context-menu-item > button > .icon,
+context-menu-item > button > .context-menu-item-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--text-color-muted);
+}
+
+context-menu-item > button > .context-menu-item-icon {
+  margin-left: 10px;
+}
+
+context-menu-item > button > .context-menu-item-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+context-menu-item > button > svg.context-menu-item-icon {
+  display: block;
+}
+
+context-menu-item > a {
+  padding: 14px 16px;
+  width: 100%;
+  color: inherit;
+  display: inline-block;
+  text-align: left;
+}
+
+context-menu-item-group {
+  border: var(--hair) solid var(--post-border-color);
+  border-radius: var(--context-menu-item-group-border-radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+context-menu-item-group:last-child {
+  margin-bottom: 0;
+}
+
+context-menu-item-group > context-menu-item {
+  margin-bottom: 0;
+}
+
+context-menu-item-group > context-menu-item:not(:last-child) {
+  border-bottom: var(--hair) solid var(--post-border-color);
+}
+
+context-menu-item-group > context-menu-item > button {
   border: none;
+  border-radius: 0;
+}
+
+@media (hover: hover) {
+  context-menu-item > a:hover,
+  context-menu-item > button:not([disabled]):hover {
+    background-color: var(--context-menu-item-hover-color);
+  }
 }
 
 @media (min-width: 800px) {
+  .context-menu-container.open {
+    position: relative;
+    inset: auto;
+  }
+
   .context-menu {
     position: absolute;
     left: auto;
@@ -6704,57 +6731,58 @@ context-menu-item-group:not(:last-child) .context-menu-item-group {
     background-color: var(--context-menu-background-color);
     border-radius: var(--context-menu-border-radius);
     animation: none;
-    padding: 0;
+    padding: 4px;
     touch-action: auto;
   }
 
-  .context-menu-item {
+  .context-menu::backdrop {
+    background-color: transparent;
+    animation: none;
+  }
+
+  .context-menu-label {
+    padding: 12px 14px 4px;
+    font-size: inherit;
+    font-weight: normal;
+  }
+
+  context-menu-item {
     margin-bottom: 0;
   }
 
-  .context-menu-item-group
-    context-menu-item:not(:last-child)
-    .context-menu-item {
+  .context-menu > context-menu-item {
+    border-bottom: var(--hair) solid var(--post-border-color);
+    padding: 4px 0;
+  }
+
+  context-menu-item > button {
+    background-color: transparent;
+    padding: 10px 12px;
+    border: none;
+    font-size: 14px;
+  }
+
+  context-menu-item-group > context-menu-item > button {
+    border-radius: var(--context-menu-button-radius);
+  }
+
+  context-menu-item-group {
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
+  }
+
+  context-menu-item-group > context-menu-item:not(:last-child) {
     border-bottom: none;
   }
 
-  .context-menu-item button {
-    background-color: transparent;
-    padding: 14px 16px;
-    border: none;
+  context-menu-item-group:not(:last-child) {
     border-bottom: var(--hair) solid var(--post-border-color);
-    border-radius: 0;
-  }
-}
-
-.context-menu-item a {
-  padding: 14px 16px;
-  width: 100%;
-  color: inherit;
-  display: inline-block;
-  text-align: left;
-}
-
-@media (hover: hover) {
-  .context-menu-item a:hover {
-    background-color: var(--context-menu-item-hover-color);
+    padding-bottom: 4px;
   }
 
-  .context-menu-item button:not([disabled]):hover {
-    background-color: var(--context-menu-item-hover-color);
-  }
-}
-
-@media (min-width: 800px) {
-  .context-menu-item-group {
-    border: none;
-    border-radius: 0;
-    margin-bottom: 0;
-  }
-
-  context-menu-item-group:not(:last-child) .context-menu-item-group {
-    border-bottom: var(--hair) solid var(--post-border-color);
-    margin-bottom: 0;
+  context-menu-item-group:not(:first-child) {
+    padding-top: 4px;
   }
 }
 

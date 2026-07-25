@@ -6,7 +6,7 @@ import {
 import "/js/components/toggle-switch.js";
 import "/js/components/plugin-profiles-list.js";
 import "/js/components/plugin-posts-feed.js";
-import "/js/components/plugin-icon.js";
+import "/js/components/app-icon.js";
 import "/js/components/plugin-blob-image.js";
 import "/js/components/plugin-sprite.js";
 
@@ -405,10 +405,16 @@ function resolveChildNamespace(parentNs, node) {
 
 // Render a serialized VirtualNode (text or element) into a DOM node.
 export class PluginRenderer {
-  constructor(pluginBridge, pluginId, renderContext) {
+  // pluginService is only needed for plugin-sprite (its did/cid-style trust
+  // model requires a real JS property, not a plugin-suppliable attribute —
+  // see plugin-sprite.js) and file-input staging (createFileChangeEvent
+  // below) — everything else a plugin renders (plugin-posts-feed,
+  // plugin-profiles-list) now pulls its own context via
+  // context-provider.js's getContext() instead of needing it passed in here.
+  constructor(pluginBridge, pluginId, pluginService = null) {
     this.pluginBridge = pluginBridge;
     this.pluginId = pluginId;
-    this.renderContext = renderContext;
+    this.pluginService = pluginService;
   }
 
   createRoot() {
@@ -476,7 +482,8 @@ export class PluginRenderer {
     }
     const ns = resolveChildNamespace(parentNs, node);
     if (ns === SVG_NS) return this._createSvg(node);
-    const tag = resolveTag(node, this.pluginId);
+    let tag = resolveTag(node, this.pluginId);
+    if (tag === "plugin-icon") tag = "app-icon";
     const element = document.createElement(tag);
     if (tag === "a") {
       element.setAttribute("target", "_blank");
@@ -488,26 +495,16 @@ export class PluginRenderer {
         ExternalLinkWarningModal.open({ href });
       });
     }
-    if (tag === "plugin-profiles-list") {
-      const { dataLayer } = this.renderContext;
-      element.dataLayer = dataLayer;
-    }
-    if (tag === "plugin-posts-feed") {
-      const {
-        dataLayer,
-        isAuthenticated,
-        pluginService,
-        interactionHandlers: { postInteractionHandler },
-      } = this.renderContext;
-      element.dataLayer = dataLayer;
-      element.isAuthenticated = isAuthenticated;
-      element.pluginService = pluginService;
-      element.postInteractionHandler = postInteractionHandler;
-    }
+    // plugin-profiles-list/plugin-posts-feed now pull dataLayer/
+    // pluginService/etc. themselves via context-provider.js's getContext()
+    // (see mainLayoutTemplate's <context-provider> wrapper) rather than
+    // needing them assigned here. plugin-sprite has no such context-consumer
+    // wiring of its own (see plugin-sprite.js) — did/cid-style trust model,
+    // must be told which plugin owns it via a real JS property, never a
+    // plugin-suppliable attribute — so it's still set explicitly here.
     if (tag === "plugin-sprite") {
-      const { pluginService } = this.renderContext;
       element.pluginId = this.pluginId;
-      element.pluginService = pluginService;
+      element.pluginService = this.pluginService;
     }
     if (tag === "toggle-switch") {
       // toggle-switch is controlled — flip its state here since the plugin
@@ -737,7 +734,7 @@ export class PluginRenderer {
           const virtualEvent =
             name === "change" && isFileInput(element)
               ? createFileChangeEvent(
-                  this.renderContext?.pluginService,
+                  this.pluginService,
                   this.pluginId,
                   element,
                 )
