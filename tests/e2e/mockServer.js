@@ -10,7 +10,11 @@ import {
 } from "./testPlugin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEST_SPRITE_PATH = path.resolve(__dirname, "fixtures", "test-sprite.png");
+export const TEST_SPRITE_PATH = path.resolve(
+  __dirname,
+  "fixtures",
+  "test-sprite.png",
+);
 
 export class MockServer {
   constructor() {

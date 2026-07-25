@@ -204,6 +204,37 @@ describe("MainLayout", () => {
     ]);
   });
 
+  it("sets context-profile-actor from the route param only on the profile page kind", async () => {
+    const { appRoot, $currentRoute } = harness;
+    $currentRoute.set({
+      path: "/profile/alice.bsky.social",
+      route: "/profile/:handleOrDid",
+      params: { handleOrDid: "alice.bsky.social" },
+      options: {},
+    });
+    await flushRender();
+    assert.deepEqual(
+      appRoot
+        .querySelector("plugin-slot")
+        .getAttribute("context-profile-actor"),
+      "alice.bsky.social",
+    );
+
+    $currentRoute.set({
+      path: "/",
+      route: "/",
+      params: {},
+      options: {},
+    });
+    await flushRender();
+    assert.deepEqual(
+      appRoot
+        .querySelector("plugin-slot")
+        .getAttribute("context-profile-actor"),
+      "",
+    );
+  });
+
   it("reflects plugin sidebar item registration reactively", async () => {
     const { appRoot, sidebarItems } = harness;
     assert.deepEqual(appRoot.querySelector(".sidebar-plugin-nav-item"), null);

@@ -119,6 +119,7 @@ export function mainLayoutTemplate({
   onLongPressProfile = null,
   groupChatLinkService,
   pageKind = "other",
+  profileActor = null,
 }) {
   return html`
     <div
@@ -152,6 +153,7 @@ export function mainLayoutTemplate({
           name=${OVERLAY_SLOT_NAME}
           context-page=${pageKind}
           context-notifications=${numNotifications ?? 0}
+          context-profile-actor=${profileActor ?? ""}
           .pluginService=${pluginService}
         ></plugin-slot>
       </div>
@@ -224,6 +226,14 @@ export class MainLayout extends Layout {
           ? layoutOptions.activeNavItem(currentRoute.params)
           : (layoutOptions.activeNavItem ?? null);
       const pageKind = derivePageKind(currentRoute?.route ?? null);
+      // Only meaningful on the profile page kind — the handle or DID of
+      // whichever profile is being viewed, straight from the route param
+      // (app.bsky's getProfile-family endpoints already accept either
+      // interchangeably, so no extra resolution step is needed here).
+      const profileActor =
+        pageKind === "profile"
+          ? (currentRoute?.params?.handleOrDid ?? null)
+          : null;
       const previewingPlugins = pluginService.isPreviewMode
         ? pluginService.$pluginsInfo.get().filter((plugin) => plugin.loaded)
         : [];
@@ -245,6 +255,7 @@ export class MainLayout extends Layout {
           onLongPressProfile,
           groupChatLinkService,
           pageKind,
+          profileActor,
         }),
         container,
       );

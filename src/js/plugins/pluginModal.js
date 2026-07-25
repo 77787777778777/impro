@@ -113,10 +113,27 @@ const ACTION_LABELS = {
   block: "Block and unblock accounts on your behalf",
   feedFeedback:
     'Send feed feedback (e.g. "show fewer/more like this") on your behalf',
+  like: "Like and unlike posts on your behalf",
+  repost: "Repost and un-repost posts on your behalf",
+  follow: "Follow and unfollow accounts on your behalf",
+  bookmark: "Save and remove bookmarked posts on your behalf",
 };
 
 const UI_LABELS = {
   overlay: "Show a persistent overlay on top of every screen",
+};
+
+const NETWORK_LABELS = {
+  configuredEndpoint:
+    "Send requests to an address you configure and approve in its settings",
+};
+
+const IMAGE_LABELS = {
+  upload: "Store custom images you upload in its settings",
+};
+
+const CLIPBOARD_LABELS = {
+  write: "Copy text it generates to your clipboard",
 };
 
 function permissionsListTemplate({ permissions }) {
@@ -158,6 +175,42 @@ function permissionsListTemplate({ permissions }) {
       </div>
     `);
   }
+  const networkScopes = permissions.network ?? [];
+  if (networkScopes.length > 0) {
+    sections.push(html`
+      <div class="permission-prompt-section">
+        <ul class="permission-prompt-list">
+          ${networkScopes.map(
+            (scope) => html`<li>${NETWORK_LABELS[scope] ?? scope}</li>`,
+          )}
+        </ul>
+      </div>
+    `);
+  }
+  const imageScopes = permissions.images ?? [];
+  if (imageScopes.length > 0) {
+    sections.push(html`
+      <div class="permission-prompt-section">
+        <ul class="permission-prompt-list">
+          ${imageScopes.map(
+            (scope) => html`<li>${IMAGE_LABELS[scope] ?? scope}</li>`,
+          )}
+        </ul>
+      </div>
+    `);
+  }
+  const clipboardScopes = permissions.clipboard ?? [];
+  if (clipboardScopes.length > 0) {
+    sections.push(html`
+      <div class="permission-prompt-section">
+        <ul class="permission-prompt-list">
+          ${clipboardScopes.map(
+            (scope) => html`<li>${CLIPBOARD_LABELS[scope] ?? scope}</li>`,
+          )}
+        </ul>
+      </div>
+    `);
+  }
   return sections;
 }
 
@@ -174,6 +227,28 @@ export async function showPluginInstallPermissionsModal({
     {
       title: "Grant permissions?",
       confirmButtonText: "Allow and install",
+    },
+  );
+}
+
+// Host-native (not plugin-rendered) confirmation that a plugin may send
+// requests to exactly this URL, going forward, until the user approves a
+// different one. Rendering this with a plain string (not plugin-supplied
+// VirtualEl content) is the whole point — a plugin must never be able to
+// spoof the address the user is being asked to approve.
+export async function showConfiguredEndpointModal({ pluginName, url }) {
+  const name = pluginName ?? "This plugin";
+  return confirmModal(
+    html`<span data-testid="configured-endpoint-prompt">
+      <span
+        >${name} wants to send requests to the following address, and only this
+        address, until you approve a different one:</span
+      >
+      <p><code data-testid="configured-endpoint-url">${url}</code></p>
+    </span>`,
+    {
+      title: "Allow this address?",
+      confirmButtonText: "Allow",
     },
   );
 }

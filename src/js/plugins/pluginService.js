@@ -4,6 +4,7 @@ import {
   hidePluginModal,
   showPluginInstallPermissionsModal,
   showPluginUpdatePermissionsModal,
+  showConfiguredEndpointModal,
 } from "/js/plugins/pluginModal.js";
 import { showPluginToast, hidePluginToast, showToast } from "/js/toasts.js";
 import { PluginRenderer } from "/js/plugins/pluginRendering.js";
@@ -13,11 +14,23 @@ import {
 } from "/js/plugins/pluginRegistry.js";
 import { PluginCache } from "/js/plugins/pluginCache.js";
 import { PluginAssetsLoader } from "/js/plugins/pluginAssetsLoader.js";
+import { PluginSprite } from "/js/components/plugin-sprite.js";
+import { PluginFileStaging } from "/js/plugins/pluginFileStaging.js";
+import {
+  PluginCustomImages,
+  toPublicDescriptor,
+} from "/js/plugins/pluginCustomImages.js";
 import { getLandmarkRects } from "/js/plugins/pluginLandmarks.js";
 import { PluginPreferencesManager } from "/js/plugins/pluginPreferencesManager.js";
 import { SourceProvider } from "/js/plugins/sourceProvider.js";
 import { PluginStylesLoader } from "/js/plugins/pluginStylesLoader.js";
 import { pluginFetch } from "/js/plugins/pluginRequests.js";
+import { pluginConfiguredFetch } from "/js/plugins/pluginConfiguredFetch.js";
+import {
+  getConfiguredEndpointUrl,
+  setConfiguredEndpointUrl,
+  clearConfiguredEndpointUrl,
+} from "/js/plugins/pluginEndpointStore.js";
 import { Slingshot } from "/js/slingshot.js";
 import {
   getPermissionsFromManifest,
@@ -25,6 +38,10 @@ import {
   isEmptyPermissions,
   isActionAllowed,
   isUiAllowed,
+  isNetworkAllowed,
+  isAcceptableEndpointUrl,
+  isImageUploadAllowed,
+  isClipboardWriteAllowed,
 } from "/js/plugins/pluginPermissions.js";
 import { compareVersions, groupBy, isDev, sortBy } from "/js/utils.js";
 import {
@@ -188,10 +205,14 @@ export class PluginService extends ReactiveStore {
     this.sourceProvider = new SourceProvider(this.pluginCache);
     this.pluginStylesLoader = new PluginStylesLoader();
     this.pluginAssetsLoader = new PluginAssetsLoader();
+    this.pluginFileStaging = new PluginFileStaging();
+    this.pluginCustomImages = new PluginCustomImages();
     this.pluginBridge = new PluginBridge(
       this.sourceProvider,
       this.pluginStylesLoader,
       this.pluginAssetsLoader,
+      undefined,
+      this.pluginCustomImages,
     );
     this.prefManager = new PluginPreferencesManager(preferencesProvider);
     this.$installedPlugins = new Signal.Computed(() =>
@@ -410,6 +431,128 @@ export class PluginService extends ReactiveStore {
       return pluginFetch(plugin, url, init);
     });
 
+    this.pluginBridge.addHostMethod(
+      "getConfiguredEndpointUrl",
+      async (plugin) => {
+        this._requireNetworkPermission(plugin, "configuredEndpoint");
+        return getConfiguredEndpointUrl(plugin.pluginId);
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "requestConfiguredEndpointUrl",
+      async (plugin, { url }) => {
+        this._requireNetworkPermission(plugin, "configuredEndpoint");
+        requireHostMethodArg("requestConfiguredEndpointUrl", "url", url);
+        if (!isAcceptableEndpointUrl(url)) {
+          throw new Error(`"${url}" is not an allowed endpoint address`);
+        }
+        const accepted = await showConfiguredEndpointModal({
+          pluginName: plugin.manifest.name,
+          url,
+        });
+        if (accepted) setConfiguredEndpointUrl(plugin.pluginId, url);
+        return {
+          accepted: Boolean(accepted),
+          url: getConfiguredEndpointUrl(plugin.pluginId),
+        };
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "configuredFetch",
+      async (plugin, { url, init }) => {
+        this._requireNetworkPermission(plugin, "configuredEndpoint");
+        const approvedUrl = getConfiguredEndpointUrl(plugin.pluginId);
+        return pluginConfiguredFetch(url, init, approvedUrl);
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "registerCustomImage",
+      async (
+        plugin,
+        { name, frameWidth, frameHeight, frameCount, fileToken },
+      ) => {
+        this._requireImageUploadPermission(plugin);
+        const file = this.pluginFileStaging.take(plugin.pluginId, fileToken);
+        if (!file) {
+          throw new Error(
+            "No staged file for this upload (it may have expired)",
+          );
+        }
+        const bytes = await file.arrayBuffer();
+        const record = await this.pluginCustomImages.register(
+          plugin.pluginId,
+          { name, frameWidth, frameHeight, frameCount },
+          bytes,
+        );
+        this.pluginAssetsLoader.mountCustomImage(plugin.pluginId, name, record);
+        // Force any already-connected <plugin-sprite image={name}> elements
+        // to pick up the new mount — an unchanged "image" attribute value
+        // (the common case when overriding an already-displayed built-in
+        // animation, see pluginCustomImages.js) never triggers
+        // attributeChangedCallback on its own.
+        PluginSprite.invalidate(plugin.pluginId, name);
+        return toPublicDescriptor(record);
+      },
+    );
+
+    this.pluginBridge.addHostMethod("listCustomImages", async (plugin) => {
+      this._requireImageUploadPermission(plugin);
+      return this.pluginCustomImages.list(plugin.pluginId);
+    });
+
+    this.pluginBridge.addHostMethod(
+      "deleteCustomImage",
+      async (plugin, { name }) => {
+        this._requireImageUploadPermission(plugin);
+        await this.pluginCustomImages.delete(plugin.pluginId, name);
+        // If this name also belongs to a bundled manifest.images entry (the
+        // custom image was overriding it), restore the bundled original
+        // instead of leaving that name unmounted — re-fetching it is cheap,
+        // it's the same per-image loader loadPlugin() already calls, and
+        // its bytes are typically still warm in pluginCache.
+        const manifestImage = (plugin.manifest.images ?? []).find(
+          (image) => image.name === name,
+        );
+        if (manifestImage) {
+          const installedPlugin = this.prefManager.$installedPlugin.get(
+            plugin.pluginId,
+          );
+          const blob = await this.sourceProvider.getImage(
+            plugin.pluginId,
+            installedPlugin?.version,
+            installedPlugin?.repo,
+            manifestImage.file,
+            {
+              frameWidth: manifestImage.frameWidth,
+              frameHeight: manifestImage.frameHeight,
+              frameCount: manifestImage.frameCount,
+            },
+          );
+          this.pluginAssetsLoader.mountCustomImage(plugin.pluginId, name, {
+            blob,
+            frameWidth: manifestImage.frameWidth,
+            frameHeight: manifestImage.frameHeight,
+            frameCount: manifestImage.frameCount,
+          });
+        } else {
+          this.pluginAssetsLoader.unmountImage(plugin.pluginId, name);
+        }
+        PluginSprite.invalidate(plugin.pluginId, name);
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "copyToClipboard",
+      async (plugin, { text }) => {
+        this._requireClipboardPermission(plugin);
+        requireHostMethodArg("copyToClipboard", "text", text);
+        await navigator.clipboard.writeText(String(text));
+      },
+    );
+
     this.pluginBridge.addHostMethod("getPost", async (plugin, { uri }) => {
       if (!this._dataLayer) return null;
       try {
@@ -510,6 +653,69 @@ export class PluginService extends ReactiveStore {
     );
 
     this.pluginBridge.addHostMethod(
+      "likePost",
+      async (plugin, { uri, like = true }) => {
+        this._requireSignedIn();
+        this._requireActionPermission(plugin, "like");
+        requireHostMethodArg("likePost", "uri", uri);
+        const post = await this._resolvePostForMutation(uri);
+        if (like) await this._dataLayer.mutations.addLike(post);
+        else await this._dataLayer.mutations.removeLike(post);
+        this.broadcastEvent(like ? "post-liked" : "post-unliked", {
+          uri,
+          position: null,
+        });
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "repostPost",
+      async (plugin, { uri, repost = true }) => {
+        this._requireSignedIn();
+        this._requireActionPermission(plugin, "repost");
+        requireHostMethodArg("repostPost", "uri", uri);
+        const post = await this._resolvePostForMutation(uri);
+        if (repost) await this._dataLayer.mutations.createRepost(post);
+        else await this._dataLayer.mutations.deleteRepost(post);
+        this.broadcastEvent(repost ? "post-reposted" : "post-unreposted", {
+          uri,
+          position: null,
+        });
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "followActor",
+      async (plugin, { did, follow = true }) => {
+        this._requireSignedIn();
+        this._requireActionPermission(plugin, "follow");
+        requireHostMethodArg("followActor", "did", did);
+        const profile = await this._resolveProfileForMutationAsync(did);
+        if (follow) await this._dataLayer.mutations.followProfile(profile);
+        else await this._dataLayer.mutations.unfollowProfile(profile);
+        this.broadcastEvent(
+          follow ? "profile-followed" : "profile-unfollowed",
+          { did, position: null },
+        );
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
+      "bookmarkPost",
+      async (plugin, { uri, bookmark = true }) => {
+        this._requireSignedIn();
+        this._requireActionPermission(plugin, "bookmark");
+        requireHostMethodArg("bookmarkPost", "uri", uri);
+        const post = await this._resolvePostForMutation(uri);
+        if (bookmark) await this._dataLayer.mutations.addBookmark(post);
+        else await this._dataLayer.mutations.removeBookmark(post);
+        // No broadcast — unlike like/repost/follow, nothing listens for a
+        // bookmark change today (see postInteractionHandler.js's own
+        // handleBookmark, which doesn't broadcast one either).
+      },
+    );
+
+    this.pluginBridge.addHostMethod(
       "showLessLikeThis",
       async (plugin, { postUri, feedUri = null }) => {
         this._requireSignedIn();
@@ -572,11 +778,59 @@ export class PluginService extends ReactiveStore {
     }
   }
 
+  _requireNetworkPermission(plugin, scope) {
+    if (!isNetworkAllowed(scope, plugin.permissions)) {
+      throw new Error(
+        `"${plugin.pluginId}" does not have "${scope}" network permission`,
+      );
+    }
+  }
+
+  _requireImageUploadPermission(plugin) {
+    if (!isImageUploadAllowed(plugin.permissions)) {
+      throw new Error(
+        `"${plugin.pluginId}" does not have "upload" images permission`,
+      );
+    }
+  }
+
+  _requireClipboardPermission(plugin) {
+    if (!isClipboardWriteAllowed(plugin.permissions)) {
+      throw new Error(
+        `"${plugin.pluginId}" does not have "write" clipboard permission`,
+      );
+    }
+  }
+
   _resolveProfileForMutation(did) {
     return (
       this._dataLayer.derived.$hydratedDetailedProfiles.get(did) ??
       this._dataLayer.derived.$hydratedProfiles.get(did) ?? { did }
     );
+  }
+
+  // Unlike _resolveProfileForMutation (mute/block, which tolerate a bare
+  // {did} stand-in since those mutations don't need anything more), like/
+  // repost/bookmark need a real hydrated post (specifically its cid) to
+  // build a valid record subject, and follow's mutations.followProfile
+  // reads back fields (e.g. did) that a bare stand-in can't be trusted to
+  // have if the given did doesn't actually resolve — so these fetch on a
+  // cache miss (same as the getPost/getDetailedProfile host methods) and
+  // throw clearly rather than proceed with incomplete data.
+  async _resolvePostForMutation(uri) {
+    const post = await this._dataLayer.declarative
+      .ensurePost(uri)
+      .catch(() => null);
+    if (!post) throw new Error(`Could not resolve post "${uri}"`);
+    return post;
+  }
+
+  async _resolveProfileForMutationAsync(did) {
+    const profile = await this._dataLayer.declarative
+      .ensureDetailedProfile(did)
+      .catch(() => null);
+    if (!profile) throw new Error(`Could not resolve profile "${did}"`);
+    return profile;
   }
 
   async loadEnabledPlugins() {
@@ -865,6 +1119,8 @@ export class PluginService extends ReactiveStore {
     this.pluginBridge.unloadPlugin(pluginId);
     await this.prefManager.removeInstalledPlugin(pluginId);
     await this.prefManager.clearSettingsForPlugin(pluginId);
+    clearConfiguredEndpointUrl(pluginId);
+    await this.pluginCustomImages.purgeForPlugin(pluginId);
     await this._reconcileCache(this.prefManager.$installedPlugins.get());
   }
 

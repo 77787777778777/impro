@@ -6,6 +6,10 @@ import {
   isEmptyPermissions,
   isFetchAllowed,
   isActionAllowed,
+  isNetworkAllowed,
+  isImageUploadAllowed,
+  isClipboardWriteAllowed,
+  isAcceptableEndpointUrl,
 } from "/js/plugins/pluginPermissions.js";
 
 describe("parsePermissions", () => {
@@ -61,6 +65,58 @@ describe("parsePermissions", () => {
     assert.deepEqual(parsePermissions({ actions: [] }), {});
     assert.deepEqual(parsePermissions({ actions: ["feedback"] }), {});
   });
+
+  it("parses known network scopes and drops unknown ones", () => {
+    assert.deepEqual(
+      parsePermissions({ network: ["configuredEndpoint", "anyHost"] }),
+      { network: ["configuredEndpoint"] },
+    );
+  });
+
+  it("wraps a string network value into an array", () => {
+    assert.deepEqual(parsePermissions({ network: "configuredEndpoint" }), {
+      network: ["configuredEndpoint"],
+    });
+  });
+
+  it("omits the network key when no valid scopes remain", () => {
+    assert.deepEqual(parsePermissions({ network: [] }), {});
+    assert.deepEqual(parsePermissions({ network: ["anyHost"] }), {});
+  });
+
+  it("parses known image scopes and drops unknown ones", () => {
+    assert.deepEqual(parsePermissions({ images: ["upload", "delete-all"] }), {
+      images: ["upload"],
+    });
+  });
+
+  it("wraps a string images value into an array", () => {
+    assert.deepEqual(parsePermissions({ images: "upload" }), {
+      images: ["upload"],
+    });
+  });
+
+  it("omits the images key when no valid scopes remain", () => {
+    assert.deepEqual(parsePermissions({ images: [] }), {});
+    assert.deepEqual(parsePermissions({ images: ["download"] }), {});
+  });
+
+  it("parses known clipboard scopes and drops unknown ones", () => {
+    assert.deepEqual(parsePermissions({ clipboard: ["write", "read"] }), {
+      clipboard: ["write"],
+    });
+  });
+
+  it("wraps a string clipboard value into an array", () => {
+    assert.deepEqual(parsePermissions({ clipboard: "write" }), {
+      clipboard: ["write"],
+    });
+  });
+
+  it("omits the clipboard key when no valid scopes remain", () => {
+    assert.deepEqual(parsePermissions({ clipboard: [] }), {});
+    assert.deepEqual(parsePermissions({ clipboard: ["read"] }), {});
+  });
 });
 
 describe("isActionAllowed", () => {
@@ -73,6 +129,65 @@ describe("isActionAllowed", () => {
 
   it("denies everything when the actions key is missing", () => {
     assert(!isActionAllowed("mute", {}));
+  });
+});
+
+describe("isNetworkAllowed", () => {
+  it("allows only granted network scopes", () => {
+    const permissions = { network: ["configuredEndpoint"] };
+    assert(isNetworkAllowed("configuredEndpoint", permissions));
+  });
+
+  it("denies everything when the network key is missing", () => {
+    assert(!isNetworkAllowed("configuredEndpoint", {}));
+  });
+});
+
+describe("isImageUploadAllowed", () => {
+  it("allows uploads when the upload scope is granted", () => {
+    assert(isImageUploadAllowed({ images: ["upload"] }));
+  });
+
+  it("denies uploads when the images key is missing", () => {
+    assert(!isImageUploadAllowed({}));
+  });
+});
+
+describe("isClipboardWriteAllowed", () => {
+  it("allows writes when the write scope is granted", () => {
+    assert(isClipboardWriteAllowed({ clipboard: ["write"] }));
+  });
+
+  it("denies writes when the clipboard key is missing", () => {
+    assert(!isClipboardWriteAllowed({}));
+  });
+});
+
+describe("isAcceptableEndpointUrl", () => {
+  it("accepts any https url", () => {
+    assert(
+      isAcceptableEndpointUrl("https://api.openai.com/v1/chat/completions"),
+    );
+    assert(isAcceptableEndpointUrl("https://example.com/"));
+  });
+
+  it("accepts http only for loopback hostnames", () => {
+    assert(
+      isAcceptableEndpointUrl("http://localhost:11434/v1/chat/completions"),
+    );
+    assert(isAcceptableEndpointUrl("http://127.0.0.1:11434/api/chat"));
+    assert(isAcceptableEndpointUrl("http://[::1]:11434/api/chat"));
+  });
+
+  it("rejects http for non-loopback hostnames", () => {
+    assert(!isAcceptableEndpointUrl("http://example.com/"));
+    assert(!isAcceptableEndpointUrl("http://192.168.1.5:11434/"));
+  });
+
+  it("rejects other protocols and malformed urls", () => {
+    assert(!isAcceptableEndpointUrl("ftp://example.com/"));
+    assert(!isAcceptableEndpointUrl("not a url"));
+    assert(!isAcceptableEndpointUrl(""));
   });
 });
 

@@ -1297,3 +1297,82 @@ describe("PluginRenderer:svg", () => {
     assert.deepEqual(element.textContent, "hello");
   });
 });
+
+describe("PluginRenderer:file input change events", () => {
+  it("allows the accept attribute on a file input", () => {
+    const { bridge } = makeBridge();
+    const renderer = new PluginRenderer(bridge, "demo");
+    const input = renderer.createRoot().render({
+      tag: "input",
+      attrs: { type: "file", accept: "image/png" },
+    });
+    assert.deepEqual(input.getAttribute("accept"), "image/png");
+  });
+
+  it("stages the picked File and delivers an opaque token, never the file itself", () => {
+    const { bridge, calls } = makeBridge();
+    const stageCalls = [];
+    const pluginService = {
+      pluginFileStaging: {
+        stage: (pluginId, file) => {
+          stageCalls.push({ pluginId, file });
+          return "token-123";
+        },
+      },
+    };
+    const renderer = new PluginRenderer(bridge, "demo", { pluginService });
+    const input = renderer.createRoot().render({
+      tag: "input",
+      attrs: { type: "file", accept: "image/png" },
+      events: { change: "h1" },
+    });
+    const file = new File(["png-bytes"], "sprite.png", { type: "image/png" });
+    Object.defineProperty(input, "files", {
+      value: [file],
+      configurable: true,
+    });
+    input.dispatchEvent(new Event("change"));
+    assert.deepEqual(calls.length, 1);
+    assert.deepEqual(calls[0].event, {
+      type: "change",
+      target: {
+        value: "token-123",
+        fileName: "sprite.png",
+        fileSize: file.size,
+      },
+    });
+    assert.deepEqual(stageCalls.length, 1);
+    assert.deepEqual(stageCalls[0].pluginId, "demo");
+    assert(stageCalls[0].file === file);
+  });
+
+  it("delivers an empty change event when no file is selected", () => {
+    const { bridge, calls } = makeBridge();
+    const pluginService = {
+      pluginFileStaging: { stage: () => "token" },
+    };
+    const renderer = new PluginRenderer(bridge, "demo", { pluginService });
+    const input = renderer.createRoot().render({
+      tag: "input",
+      attrs: { type: "file" },
+      events: { change: "h1" },
+    });
+    input.dispatchEvent(new Event("change"));
+    assert.deepEqual(calls[0].event, { type: "change", target: {} });
+  });
+
+  it("does not treat a text input's change event as a file event", () => {
+    const { bridge, calls } = makeBridge();
+    const renderer = new PluginRenderer(bridge, "demo");
+    const input = renderer.createRoot().render({
+      tag: "input",
+      attrs: { type: "text", value: "hi" },
+      events: { change: "h1" },
+    });
+    input.dispatchEvent(new Event("change"));
+    assert.deepEqual(calls[0].event, {
+      type: "change",
+      target: { value: "hi", checked: false },
+    });
+  });
+});

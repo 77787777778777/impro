@@ -220,11 +220,13 @@ export class PluginBridge {
     pluginStylesLoader,
     pluginAssetsLoader,
     loadPluginInstance = PluginInstance.loadFromSource,
+    pluginCustomImages = null,
   ) {
     this._provider = sourceProvider;
     this._pluginStylesLoader = pluginStylesLoader;
     this._pluginAssetsLoader = pluginAssetsLoader;
     this._loadPluginInstance = loadPluginInstance;
+    this._pluginCustomImages = pluginCustomImages;
     this._registrationTargets = new Map();
     this._loadedPlugins = new Map();
     this._hostCallHandlers = new Map();
@@ -361,6 +363,31 @@ export class PluginBridge {
           error,
         );
         throw new Error("Failed to load plugin images");
+      }
+    }
+    if (this._pluginCustomImages) {
+      try {
+        const descriptors =
+          await this._pluginCustomImages.loadDescriptorsForMount(pluginId);
+        for (const descriptor of descriptors) {
+          if (this._pluginAssetsLoader.get(pluginId, descriptor.name)) {
+            // A bundled manifest image claimed this name first (e.g. a
+            // manifest update introduced a name a user already used
+            // locally) — bundled images win, the custom one stays stored
+            // but unmounted until its name is freed up or it's deleted.
+            logger.warn(
+              `"${pluginId}" custom image "${descriptor.name}" skipped: name collides with a bundled image`,
+            );
+            continue;
+          }
+          this._pluginAssetsLoader.mountCustomImage(
+            pluginId,
+            descriptor.name,
+            descriptor,
+          );
+        }
+      } catch (error) {
+        logger.error(`"${pluginId}" failed to load custom images`, error);
       }
     }
     try {

@@ -147,6 +147,38 @@ function assertPngMagicBytes(file, bytes) {
   }
 }
 
+// Shared spritesheet validation: PNG magic bytes, a size cap, and a
+// dimension check against the declared frame geometry. Used both for
+// plugin-bundled images (manifest.json's `images` array, fetched from the
+// plugin's own repo — see getImage() below) and for images a user uploads
+// at runtime (pluginCustomImages.js) — the trust bar is the same either
+// way, so the check is written once. `label` is only ever used in error
+// text (a filename for bundled images, a user-chosen name for uploads).
+export async function validateSpritesheetImage(
+  bytes,
+  { frameWidth, frameHeight, frameCount },
+  label,
+) {
+  if (bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error(
+      `image "${label}" exceeds max size of ${MAX_IMAGE_BYTES} bytes`,
+    );
+  }
+  assertPngMagicBytes(label, bytes);
+  const blob = new Blob([bytes], { type: "image/png" });
+  const bitmap = await createImageBitmap(blob);
+  const expectedWidth = frameWidth * frameCount;
+  if (bitmap.width !== expectedWidth || bitmap.height !== frameHeight) {
+    bitmap.close();
+    throw new Error(
+      `image "${label}" is ${bitmap.width}x${bitmap.height}, expected ` +
+        `${expectedWidth}x${frameHeight} (frameWidth*frameCount x frameHeight)`,
+    );
+  }
+  bitmap.close();
+  return blob;
+}
+
 // tangled.org's own HTTP endpoints (the "/raw/<ref>/<path>" route and the
 // mirror.tangled.network XRPC service it redirects through) don't set
 // Access-Control-Allow-Origin, so browsers block fetching them cross-origin
@@ -447,24 +479,11 @@ export class SourceProvider {
         bytes = await response.arrayBuffer();
       }
     }
-    if (bytes.byteLength > MAX_IMAGE_BYTES) {
-      throw new Error(
-        `image "${file}" exceeds max size of ${MAX_IMAGE_BYTES} bytes`,
-      );
-    }
-    assertPngMagicBytes(file, bytes);
-    const blob = new Blob([bytes], { type: "image/png" });
-    const bitmap = await createImageBitmap(blob);
-    const expectedWidth = frameWidth * frameCount;
-    if (bitmap.width !== expectedWidth || bitmap.height !== frameHeight) {
-      bitmap.close();
-      throw new Error(
-        `image "${file}" is ${bitmap.width}x${bitmap.height}, expected ` +
-          `${expectedWidth}x${frameHeight} (frameWidth*frameCount x frameHeight)`,
-      );
-    }
-    bitmap.close();
-    return blob;
+    return validateSpritesheetImage(
+      bytes,
+      { frameWidth, frameHeight, frameCount },
+      file,
+    );
   }
 
   async getReadme(pluginId, repo) {
@@ -498,9 +517,7 @@ export class SourceProvider {
         files.push(font.file);
       }
       for (const image of manifest.images ?? []) {
-        urls.push(
-          await remoteAssetUrl({ repo, file: image.file, release: version }),
-        );
+        files.push(image.file);
       }
     } catch {
       // If the manifest can't be read the base URLs are still returned so

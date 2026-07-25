@@ -113,6 +113,7 @@ function makeService({
       reconcileCalls.push(urls);
     },
   };
+  service.pluginCustomImages = { purgeForPlugin: async () => {} };
   return {
     service,
     state,
@@ -1865,6 +1866,213 @@ describe("action host methods", () => {
   });
 });
 
+describe("post/profile action host methods (like/repost/follow/bookmark)", () => {
+  const postUri = "at://did:plc:author/app.bsky.feed.post/1";
+  const did = "did:plc:target";
+  const post = { uri: postUri, cid: "cid-1" };
+  const profile = { did, handle: "target.example" };
+
+  function makeService({
+    resolvePost = () => post,
+    resolveProfile = () => profile,
+  } = {}) {
+    const { provider } = makeProvider();
+    const service = new PluginService(provider, null);
+    const calls = {
+      addLike: [],
+      removeLike: [],
+      createRepost: [],
+      deleteRepost: [],
+      followProfile: [],
+      unfollowProfile: [],
+      addBookmark: [],
+      removeBookmark: [],
+    };
+    const broadcasts = [];
+    service.broadcastEvent = (event, payload) =>
+      broadcasts.push({ event, payload });
+    service.setDataLayer({
+      declarative: {
+        ensurePost: async (uri) => resolvePost(uri),
+        ensureDetailedProfile: async (d) => resolveProfile(d),
+      },
+      mutations: {
+        addLike: async (p) => calls.addLike.push(p),
+        removeLike: async (p) => calls.removeLike.push(p),
+        createRepost: async (p) => calls.createRepost.push(p),
+        deleteRepost: async (p) => calls.deleteRepost.push(p),
+        followProfile: async (p) => calls.followProfile.push(p),
+        unfollowProfile: async (p) => calls.unfollowProfile.push(p),
+        addBookmark: async (p) => calls.addBookmark.push(p),
+        removeBookmark: async (p) => calls.removeBookmark.push(p),
+      },
+    });
+    return { service, calls, broadcasts };
+  }
+
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  const grantedPlugin = (scope) => ({
+    pluginId: "test-plugin",
+    permissions: { actions: [scope] },
+  });
+  const noPermissionPlugin = {
+    pluginId: "test-plugin",
+    permissions: { actions: [] },
+  };
+
+  it("likePost routes the like flag to addLike/removeLike and broadcasts post-liked/post-unliked", async () => {
+    const { service, calls, broadcasts } = makeService();
+    await getHandler(service, "likePost")(grantedPlugin("like"), {
+      uri: postUri,
+      like: true,
+    });
+    await getHandler(service, "likePost")(grantedPlugin("like"), {
+      uri: postUri,
+      like: false,
+    });
+    assert.deepEqual(calls.addLike, [post]);
+    assert.deepEqual(calls.removeLike, [post]);
+    assert.deepEqual(broadcasts, [
+      { event: "post-liked", payload: { uri: postUri, position: null } },
+      { event: "post-unliked", payload: { uri: postUri, position: null } },
+    ]);
+  });
+
+  it("repostPost routes the repost flag to createRepost/deleteRepost and broadcasts", async () => {
+    const { service, calls, broadcasts } = makeService();
+    await getHandler(service, "repostPost")(grantedPlugin("repost"), {
+      uri: postUri,
+      repost: true,
+    });
+    await getHandler(service, "repostPost")(grantedPlugin("repost"), {
+      uri: postUri,
+      repost: false,
+    });
+    assert.deepEqual(calls.createRepost, [post]);
+    assert.deepEqual(calls.deleteRepost, [post]);
+    assert.deepEqual(broadcasts, [
+      { event: "post-reposted", payload: { uri: postUri, position: null } },
+      { event: "post-unreposted", payload: { uri: postUri, position: null } },
+    ]);
+  });
+
+  it("followActor routes the follow flag to followProfile/unfollowProfile and broadcasts", async () => {
+    const { service, calls, broadcasts } = makeService();
+    await getHandler(service, "followActor")(grantedPlugin("follow"), {
+      did,
+      follow: true,
+    });
+    await getHandler(service, "followActor")(grantedPlugin("follow"), {
+      did,
+      follow: false,
+    });
+    assert.deepEqual(calls.followProfile, [profile]);
+    assert.deepEqual(calls.unfollowProfile, [profile]);
+    assert.deepEqual(broadcasts, [
+      { event: "profile-followed", payload: { did, position: null } },
+      { event: "profile-unfollowed", payload: { did, position: null } },
+    ]);
+  });
+
+  it("bookmarkPost routes the bookmark flag to addBookmark/removeBookmark without broadcasting", async () => {
+    const { service, calls, broadcasts } = makeService();
+    await getHandler(service, "bookmarkPost")(grantedPlugin("bookmark"), {
+      uri: postUri,
+      bookmark: true,
+    });
+    await getHandler(service, "bookmarkPost")(grantedPlugin("bookmark"), {
+      uri: postUri,
+      bookmark: false,
+    });
+    assert.deepEqual(calls.addBookmark, [post]);
+    assert.deepEqual(calls.removeBookmark, [post]);
+    assert.deepEqual(broadcasts, []);
+  });
+
+  it("each method requires its own action permission", async () => {
+    const { service, calls } = makeService();
+    await assert.rejects(
+      getHandler(service, "likePost")(noPermissionPlugin, { uri: postUri }),
+      /"like" action permission/,
+    );
+    await assert.rejects(
+      getHandler(service, "repostPost")(noPermissionPlugin, { uri: postUri }),
+      /"repost" action permission/,
+    );
+    await assert.rejects(
+      getHandler(service, "followActor")(noPermissionPlugin, { did }),
+      /"follow" action permission/,
+    );
+    await assert.rejects(
+      getHandler(service, "bookmarkPost")(noPermissionPlugin, { uri: postUri }),
+      /"bookmark" action permission/,
+    );
+    assert.deepEqual(calls.addLike, []);
+    assert.deepEqual(calls.createRepost, []);
+    assert.deepEqual(calls.followProfile, []);
+    assert.deepEqual(calls.addBookmark, []);
+  });
+
+  it("each method requires a uri/did argument", async () => {
+    const { service } = makeService();
+    await assert.rejects(
+      getHandler(service, "likePost")(grantedPlugin("like"), {}),
+      /likePost requires a uri/,
+    );
+    await assert.rejects(
+      getHandler(service, "repostPost")(grantedPlugin("repost"), {}),
+      /repostPost requires a uri/,
+    );
+    await assert.rejects(
+      getHandler(service, "followActor")(grantedPlugin("follow"), {}),
+      /followActor requires a did/,
+    );
+    await assert.rejects(
+      getHandler(service, "bookmarkPost")(grantedPlugin("bookmark"), {}),
+      /bookmarkPost requires a uri/,
+    );
+  });
+
+  it("throws a clear error when the post/profile cannot be resolved", async () => {
+    const { service } = makeService({
+      resolvePost: () => null,
+      resolveProfile: () => null,
+    });
+    await assert.rejects(
+      getHandler(service, "likePost")(grantedPlugin("like"), { uri: postUri }),
+      /Could not resolve post/,
+    );
+    await assert.rejects(
+      getHandler(service, "followActor")(grantedPlugin("follow"), { did }),
+      /Could not resolve profile/,
+    );
+  });
+
+  it("all methods reject when signed out", async () => {
+    const { provider } = makeProvider();
+    const service = new PluginService(provider, null);
+    const allActionsPlugin = {
+      pluginId: "test-plugin",
+      permissions: { actions: ["like", "repost", "follow", "bookmark"] },
+    };
+    const argsByMethod = {
+      likePost: { uri: postUri },
+      repostPost: { uri: postUri },
+      followActor: { did },
+      bookmarkPost: { uri: postUri },
+    };
+    for (const [name, args] of Object.entries(argsByMethod)) {
+      await assert.rejects(
+        getHandler(service, name)(allActionsPlugin, args),
+        /Not signed in/,
+      );
+    }
+  });
+});
+
 describe("getRecord host method", () => {
   function makeServiceWithRealBridge() {
     const { provider } = makeProvider();
@@ -1987,6 +2195,464 @@ describe("getRecord host method", () => {
       );
     }
     assert.deepEqual(fetched, false);
+  });
+});
+
+describe("configured endpoint host methods", () => {
+  function makeServiceWithRealBridge() {
+    const { provider } = makeProvider();
+    return new PluginService(provider, null);
+  }
+
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  let pluginIdCounter = 0;
+  function uniquePlugin(permissions) {
+    pluginIdCounter++;
+    return {
+      pluginId: `endpoint-test-${pluginIdCounter}`,
+      manifest: { name: `Endpoint Test ${pluginIdCounter}` },
+      permissions,
+    };
+  }
+
+  const grantedPlugin = () => uniquePlugin({ network: ["configuredEndpoint"] });
+  const noPermissionPlugin = () => uniquePlugin({});
+
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("getConfiguredEndpointUrl requires network permission", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "getConfiguredEndpointUrl")(noPermissionPlugin()),
+      /"configuredEndpoint" network permission/,
+    );
+  });
+
+  it("getConfiguredEndpointUrl returns null before anything is approved", async () => {
+    const service = makeServiceWithRealBridge();
+    const result = await getHandler(
+      service,
+      "getConfiguredEndpointUrl",
+    )(grantedPlugin());
+    assert.deepEqual(result, null);
+  });
+
+  it("requestConfiguredEndpointUrl requires network permission", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "requestConfiguredEndpointUrl")(
+        noPermissionPlugin(),
+        { url: "https://api.example.com/v1" },
+      ),
+      /"configuredEndpoint" network permission/,
+    );
+  });
+
+  it("rejects an unacceptable url before ever showing a modal", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "requestConfiguredEndpointUrl")(grantedPlugin(), {
+        url: "http://example.com/v1",
+      }),
+      /not an allowed endpoint address/,
+    );
+    // If a modal had opened, this would hang forever waiting for a button
+    // that's never rendered — completing at all is the assertion.
+  });
+
+  it("stores the url and returns accepted:true when the user allows it", async () => {
+    const service = makeServiceWithRealBridge();
+    const plugin = grantedPlugin();
+    const url = "https://api.example.com/v1/chat/completions";
+    const requesting = getHandler(service, "requestConfiguredEndpointUrl")(
+      plugin,
+      { url },
+    );
+    await respondToConfirm(true);
+    const result = await requesting;
+    assert.deepEqual(result, { accepted: true, url });
+    const stored = await getHandler(
+      service,
+      "getConfiguredEndpointUrl",
+    )(plugin);
+    assert.deepEqual(stored, url);
+  });
+
+  it("does not persist the url when the user declines", async () => {
+    const service = makeServiceWithRealBridge();
+    const plugin = grantedPlugin();
+    const url = "https://api.example.com/v1/chat/completions";
+    const requesting = getHandler(service, "requestConfiguredEndpointUrl")(
+      plugin,
+      { url },
+    );
+    await respondToConfirm(false);
+    const result = await requesting;
+    assert.deepEqual(result, { accepted: false, url: null });
+  });
+
+  it("configuredFetch requires network permission", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "configuredFetch")(noPermissionPlugin(), {
+        url: "https://api.example.com/v1",
+        init: {},
+      }),
+      /"configuredEndpoint" network permission/,
+    );
+  });
+
+  it("configuredFetch delegates to the approved url only", async () => {
+    const service = makeServiceWithRealBridge();
+    const plugin = grantedPlugin();
+    const url = "https://api.example.com/v1/chat/completions";
+    const requesting = getHandler(service, "requestConfiguredEndpointUrl")(
+      plugin,
+      { url },
+    );
+    await respondToConfirm(true);
+    await requesting;
+
+    let called = null;
+    globalThis.fetch = async (fetchUrl, init) => {
+      called = { fetchUrl, init };
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => null },
+        text: async () => "{}",
+      };
+    };
+    const result = await getHandler(service, "configuredFetch")(plugin, {
+      url,
+      init: { headers: { Authorization: "Bearer sk-test" } },
+    });
+    assert.deepEqual(result.status, 200);
+    assert.deepEqual(called.fetchUrl, url);
+    assert.deepEqual(called.init.headers.Authorization, "Bearer sk-test");
+
+    await assert.rejects(
+      getHandler(service, "configuredFetch")(plugin, {
+        url: "https://evil.com/x",
+        init: {},
+      }),
+      /not the approved endpoint/,
+    );
+  });
+
+  it("uninstallPlugin clears the stored endpoint", async () => {
+    const service = makeServiceWithRealBridge();
+    service.sourceProvider = { getCacheUrls: async () => [] };
+    service.pluginCache = { reconcile: async () => {} };
+    service.pluginCustomImages = { purgeForPlugin: async () => {} };
+    const plugin = grantedPlugin();
+    const url = "https://api.example.com/v1/chat/completions";
+    const requesting = getHandler(service, "requestConfiguredEndpointUrl")(
+      plugin,
+      { url },
+    );
+    await respondToConfirm(true);
+    await requesting;
+    assert.deepEqual(
+      await getHandler(service, "getConfiguredEndpointUrl")(plugin),
+      url,
+    );
+    await service.uninstallPlugin(plugin.pluginId);
+    assert.deepEqual(
+      await getHandler(service, "getConfiguredEndpointUrl")(plugin),
+      null,
+    );
+  });
+});
+
+describe("custom image host methods", () => {
+  function makeServiceWithRealBridge() {
+    const { provider } = makeProvider();
+    return new PluginService(provider, null);
+  }
+
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  let pluginIdCounter = 0;
+  function uniquePlugin(permissions, manifestImageNames = []) {
+    pluginIdCounter++;
+    return {
+      pluginId: `image-test-${pluginIdCounter}`,
+      manifest: {
+        name: `Image Test ${pluginIdCounter}`,
+        images: manifestImageNames.map((name) => ({ name })),
+      },
+      permissions,
+    };
+  }
+
+  const grantedPlugin = (manifestImageNames) =>
+    uniquePlugin({ images: ["upload"] }, manifestImageNames);
+  const noPermissionPlugin = () => uniquePlugin({});
+
+  function makeFakeFile(bytes = new Uint8Array([1, 2, 3]).buffer) {
+    return {
+      arrayBuffer: async () => bytes,
+    };
+  }
+
+  it("registerCustomImage requires images upload permission", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "registerCustomImage")(noPermissionPlugin(), {
+        name: "x",
+        frameWidth: 1,
+        frameHeight: 1,
+        frameCount: 1,
+        fileToken: "tok",
+      }),
+      /"upload" images permission/,
+    );
+  });
+
+  it("registerCustomImage rejects a missing/expired file token", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "registerCustomImage")(grantedPlugin(), {
+        name: "x",
+        frameWidth: 1,
+        frameHeight: 1,
+        frameCount: 1,
+        fileToken: "nonexistent",
+      }),
+      /No staged file/,
+    );
+  });
+
+  it("registerCustomImage stages a file, stores it, and mounts it for rendering", async () => {
+    const service = makeServiceWithRealBridge();
+    // Swap in a fake so the test doesn't touch real indexedDB or
+    // createImageBitmap (unavailable in this node-based test env — see
+    // pluginCustomImages.test.js for its own dedicated coverage).
+    const registeredCalls = [];
+    service.pluginCustomImages = {
+      register: async (pluginId, meta, bytes) => {
+        registeredCalls.push({ pluginId, meta, bytes });
+        return {
+          pluginId,
+          name: meta.name,
+          blob: { fake: true },
+          frameWidth: meta.frameWidth,
+          frameHeight: meta.frameHeight,
+          frameCount: meta.frameCount,
+          size: bytes.byteLength,
+        };
+      },
+    };
+    const mountCalls = [];
+    service.pluginAssetsLoader = {
+      mountCustomImage: (pluginId, name, descriptor) => {
+        mountCalls.push({ pluginId, name, descriptor });
+      },
+    };
+    const plugin = grantedPlugin(["idle_breathe"]);
+    const file = makeFakeFile();
+    const token = service.pluginFileStaging.stage(plugin.pluginId, file);
+    const result = await getHandler(service, "registerCustomImage")(plugin, {
+      name: "my_dance",
+      frameWidth: 32,
+      frameHeight: 32,
+      frameCount: 4,
+      fileToken: token,
+    });
+    assert.deepEqual(result, {
+      name: "my_dance",
+      frameWidth: 32,
+      frameHeight: 32,
+      frameCount: 4,
+      size: 3,
+    });
+    assert.deepEqual(registeredCalls[0].meta.name, "my_dance");
+    assert.deepEqual(mountCalls.length, 1);
+    assert.deepEqual(mountCalls[0].name, "my_dance");
+    // The token is single-use.
+    assert.deepEqual(
+      service.pluginFileStaging.take(plugin.pluginId, token),
+      null,
+    );
+  });
+
+  it("listCustomImages requires permission and delegates to the store", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "listCustomImages")(noPermissionPlugin()),
+      /"upload" images permission/,
+    );
+    const plugin = grantedPlugin();
+    service.pluginCustomImages = {
+      list: async (pluginId) => [{ name: `list-for-${pluginId}` }],
+    };
+    const result = await getHandler(service, "listCustomImages")(plugin);
+    assert.deepEqual(result, [{ name: `list-for-${plugin.pluginId}` }]);
+  });
+
+  it("deleteCustomImage requires permission and unmounts the image", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "deleteCustomImage")(noPermissionPlugin(), {
+        name: "x",
+      }),
+      /"upload" images permission/,
+    );
+    const plugin = grantedPlugin();
+    const deleteCalls = [];
+    const unmountCalls = [];
+    service.pluginCustomImages = {
+      delete: async (pluginId, name) => deleteCalls.push({ pluginId, name }),
+    };
+    service.pluginAssetsLoader = {
+      unmountImage: (pluginId, name) => unmountCalls.push({ pluginId, name }),
+    };
+    await getHandler(service, "deleteCustomImage")(plugin, { name: "gone" });
+    assert.deepEqual(deleteCalls, [
+      { pluginId: plugin.pluginId, name: "gone" },
+    ]);
+    assert.deepEqual(unmountCalls, [
+      { pluginId: plugin.pluginId, name: "gone" },
+    ]);
+  });
+
+  it("deleteCustomImage restores the bundled image when the deleted name overrode one", async () => {
+    const service = makeServiceWithRealBridge();
+    const plugin = grantedPlugin(["idle_breathe"]);
+    // grantedPlugin only sets manifest.images[].name — fill in the rest of
+    // the manifest image entry deleteCustomImage needs to re-fetch it.
+    plugin.manifest.images = [
+      {
+        name: "idle_breathe",
+        file: "assets/001_idle_breathe.png",
+        frameWidth: 128,
+        frameHeight: 128,
+        frameCount: 15,
+      },
+    ];
+    service.pluginCustomImages = { delete: async () => {} };
+    service.prefManager.$installedPlugin = {
+      get: () => ({ version: "1.2.3", repo: "tangled:alice/buddy" }),
+    };
+    const getImageCalls = [];
+    service.sourceProvider = {
+      getImage: async (pluginId, version, repo, file, geometry) => {
+        getImageCalls.push({ pluginId, version, repo, file, geometry });
+        return { fake: "bundled-blob" };
+      },
+    };
+    const mountCalls = [];
+    service.pluginAssetsLoader = {
+      unmountImage: () => {
+        throw new Error("should not unmount — should restore instead");
+      },
+      mountCustomImage: (pluginId, name, descriptor) => {
+        mountCalls.push({ pluginId, name, descriptor });
+      },
+    };
+    await getHandler(service, "deleteCustomImage")(plugin, {
+      name: "idle_breathe",
+    });
+    assert.deepEqual(getImageCalls, [
+      {
+        pluginId: plugin.pluginId,
+        version: "1.2.3",
+        repo: "tangled:alice/buddy",
+        file: "assets/001_idle_breathe.png",
+        geometry: { frameWidth: 128, frameHeight: 128, frameCount: 15 },
+      },
+    ]);
+    assert.deepEqual(mountCalls, [
+      {
+        pluginId: plugin.pluginId,
+        name: "idle_breathe",
+        descriptor: {
+          blob: { fake: "bundled-blob" },
+          frameWidth: 128,
+          frameHeight: 128,
+          frameCount: 15,
+        },
+      },
+    ]);
+  });
+
+  it("uninstallPlugin purges custom images", async () => {
+    const service = makeServiceWithRealBridge();
+    service.sourceProvider = { getCacheUrls: async () => [] };
+    service.pluginCache = { reconcile: async () => {} };
+    const purgeCalls = [];
+    service.pluginCustomImages = {
+      purgeForPlugin: async (pluginId) => purgeCalls.push(pluginId),
+    };
+    const plugin = grantedPlugin();
+    await service.uninstallPlugin(plugin.pluginId);
+    assert.deepEqual(purgeCalls, [plugin.pluginId]);
+  });
+});
+
+describe("clipboard host methods", () => {
+  function makeServiceWithRealBridge() {
+    const { provider } = makeProvider();
+    return new PluginService(provider, null);
+  }
+
+  function getHandler(service, name) {
+    return service.pluginBridge._hostCallHandlers.get(name);
+  }
+
+  const grantedPlugin = () => ({
+    pluginId: "clipboard-test",
+    manifest: { name: "Clipboard Test" },
+    permissions: { clipboard: ["write"] },
+  });
+  const noPermissionPlugin = () => ({
+    pluginId: "clipboard-test-no-perm",
+    manifest: { name: "Clipboard Test" },
+    permissions: {},
+  });
+
+  it("copyToClipboard requires clipboard write permission", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "copyToClipboard")(noPermissionPlugin(), {
+        text: "hello",
+      }),
+      /"write" clipboard permission/,
+    );
+  });
+
+  it("copyToClipboard rejects a missing text argument", async () => {
+    const service = makeServiceWithRealBridge();
+    await assert.rejects(
+      getHandler(service, "copyToClipboard")(grantedPlugin(), {}),
+      /text/,
+    );
+  });
+
+  it("copyToClipboard writes the exact text to navigator.clipboard", async () => {
+    const service = makeServiceWithRealBridge();
+    const writeCalls = [];
+    const originalClipboard = navigator.clipboard;
+    navigator.clipboard = {
+      writeText: async (text) => writeCalls.push(text),
+    };
+    try {
+      await getHandler(service, "copyToClipboard")(grantedPlugin(), {
+        text: "drafted reply text",
+      });
+    } finally {
+      navigator.clipboard = originalClipboard;
+    }
+    assert.deepEqual(writeCalls, ["drafted reply text"]);
   });
 });
 

@@ -29,6 +29,33 @@ export class PluginAssetsLoader {
     this._images.delete(pluginId);
   }
 
+  // Single-entry counterparts to mountImages/unmountImages, additive rather
+  // than wholesale-replacing — used for user-uploaded custom images
+  // (pluginCustomImages.js), which live in the same per-plugin map as
+  // bundled manifest.images so <plugin-sprite> needs no changes to render
+  // either kind.
+  mountCustomImage(pluginId, name, descriptor) {
+    let byName = this._images.get(pluginId);
+    if (!byName) {
+      byName = new Map();
+      this._images.set(pluginId, byName);
+    }
+    byName.set(name, {
+      url: URL.createObjectURL(descriptor.blob),
+      frameWidth: descriptor.frameWidth,
+      frameHeight: descriptor.frameHeight,
+      frameCount: descriptor.frameCount,
+    });
+  }
+
+  unmountImage(pluginId, name) {
+    const byName = this._images.get(pluginId);
+    const entry = byName?.get(name);
+    if (!entry) return;
+    URL.revokeObjectURL(entry.url);
+    byName.delete(name);
+  }
+
   get(pluginId, name) {
     return this._images.get(pluginId)?.get(name) ?? null;
   }

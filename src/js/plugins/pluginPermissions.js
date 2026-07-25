@@ -1,7 +1,18 @@
 import { unique } from "/js/utils.js";
 
-const ACTION_SCOPES = ["mute", "block", "feedFeedback"];
+const ACTION_SCOPES = [
+  "mute",
+  "block",
+  "feedFeedback",
+  "like",
+  "repost",
+  "follow",
+  "bookmark",
+];
 const UI_SCOPES = ["overlay"];
+const NETWORK_SCOPES = ["configuredEndpoint"];
+const IMAGE_SCOPES = ["upload"];
+const CLIPBOARD_SCOPES = ["write"];
 
 export function getPermissionsFromManifest(manifest) {
   return parsePermissions(manifest.permissions ?? {});
@@ -36,11 +47,39 @@ export function parsePermissions(permissions) {
     );
     if (uiScopes.length > 0) parsed.ui = uiScopes;
   }
+  if (permissions.network) {
+    const networkArray = Array.isArray(permissions.network)
+      ? permissions.network
+      : [permissions.network];
+    const networkScopes = unique(
+      networkArray.filter((entry) => NETWORK_SCOPES.includes(entry)),
+    );
+    if (networkScopes.length > 0) parsed.network = networkScopes;
+  }
+  if (permissions.images) {
+    const imagesArray = Array.isArray(permissions.images)
+      ? permissions.images
+      : [permissions.images];
+    const imageScopes = unique(
+      imagesArray.filter((entry) => IMAGE_SCOPES.includes(entry)),
+    );
+    if (imageScopes.length > 0) parsed.images = imageScopes;
+  }
+  if (permissions.clipboard) {
+    const clipboardArray = Array.isArray(permissions.clipboard)
+      ? permissions.clipboard
+      : [permissions.clipboard];
+    const clipboardScopes = unique(
+      clipboardArray.filter((entry) => CLIPBOARD_SCOPES.includes(entry)),
+    );
+    if (clipboardScopes.length > 0) parsed.clipboard = clipboardScopes;
+  }
   return parsed;
 }
 
 // action is one of "mute", "block", "feedFeedback" (the "show fewer/more
-// like this" feed-interaction signal)
+// like this" feed-interaction signal), "like", "repost", "follow", or
+// "bookmark"
 export function isActionAllowed(action, permissions) {
   return (permissions.actions ?? []).includes(action);
 }
@@ -49,6 +88,51 @@ export function isActionAllowed(action, permissions) {
 // route-independent widget mounted in the app shell, see OVERLAY_SLOT_NAME)
 export function isUiAllowed(scope, permissions) {
   return (permissions.ui ?? []).includes(scope);
+}
+
+// scope is one of NETWORK_SCOPES (currently just "configuredEndpoint" — lets
+// a plugin send requests to the single URL a human has personally entered
+// into that plugin's own settings, see pluginConfiguredFetch.js. This is
+// deliberately *not* a manifest-declared allowlist like permissions.fetch;
+// the manifest only grants the *capability*, not any particular host).
+export function isNetworkAllowed(scope, permissions) {
+  return (permissions.network ?? []).includes(scope);
+}
+
+// Currently just "upload" — lets a plugin store user-uploaded spritesheet
+// images locally (see pluginCustomImages.js) instead of only shipping
+// images bundled into the plugin's own repo.
+export function isImageUploadAllowed(permissions) {
+  return (permissions.images ?? []).includes("upload");
+}
+
+// Currently just "write" — lets a plugin write text to the system
+// clipboard (see pluginService.js's copyToClipboard host method). There is
+// no read counterpart: a plugin can hand the user text to paste somewhere,
+// never read what's already on their clipboard.
+export function isClipboardWriteAllowed(permissions) {
+  return (permissions.clipboard ?? []).includes("write");
+}
+
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+// Is this URL even eligible to be approved as a plugin's configured
+// endpoint? https is always fine; plain http is only fine for loopback
+// addresses, since that's how local model servers (e.g. Ollama) default to
+// running and there's no network-level MITM risk to a request that never
+// leaves the machine.
+export function isAcceptableEndpointUrl(url) {
+  let parsedUrl = null;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsedUrl.protocol === "https:") return true;
+  if (parsedUrl.protocol === "http:") {
+    return LOOPBACK_HOSTNAMES.has(parsedUrl.hostname.toLowerCase());
+  }
+  return false;
 }
 
 export function diffPermissions(current, next) {

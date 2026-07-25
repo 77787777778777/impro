@@ -11,6 +11,7 @@ import {
   OVERLAY_SPRITE_FRAME_COUNT,
   getOverlaySpritePluginSource,
   getOverlayReactivePluginSource,
+  getFeedRefreshedPluginSource,
   getOverlayLandmarksPluginSource,
   getOverlayMovementPluginSource,
   getOverlayReducedMotionPluginSource,
@@ -140,6 +141,61 @@ test.describe("Broadcast app-action events", () => {
     );
     await expect(reacted).toBeAttached({ timeout: 10000 });
     await expect(reacted).toHaveAttribute("data-liked-uri", post.uri);
+  });
+
+  test("reloading the timeline fires feed-refreshed with the feed uri and new post count", async ({
+    page,
+  }) => {
+    const mockServer = new MockServer();
+    const existingPost = createPost({
+      uri: "at://did:plc:author1/app.bsky.feed.post/existing",
+      text: "Already seen",
+      authorHandle: "author1.bsky.social",
+      authorDisplayName: "Author One",
+    });
+    mockServer.addTimelinePosts([existingPost]);
+    mockServer.installedPlugins = [
+      { ...OVERLAY_PLUGIN_MANIFEST, enabled: false },
+    ];
+    mockServer.localPluginManifest = OVERLAY_PLUGIN_RAW_MANIFEST;
+    mockServer.localPluginSource = getFeedRefreshedPluginSource();
+    await mockServer.setup(page);
+
+    await login(page);
+    await enablePlugin(page);
+
+    await page.goto("/");
+    const homeView = page.locator("#home-view");
+    await expect(homeView.locator('[data-testid="feed-item"]')).toHaveCount(1, {
+      timeout: 10000,
+    });
+
+    // Add a genuinely new post server-side before triggering the reload, so
+    // newPostCount reflects a real diff rather than always being 0.
+    const newPost = createPost({
+      uri: "at://did:plc:author2/app.bsky.feed.post/brand-new",
+      text: "Brand new since last refresh",
+      authorHandle: "author2.bsky.social",
+      authorDisplayName: "Author Two",
+    });
+    mockServer.addTimelinePosts([newPost]);
+
+    await homeView.locator(".tab-bar-button.active").click();
+    await expect(homeView.locator('[data-testid="feed-item"]')).toHaveCount(2, {
+      timeout: 10000,
+    });
+
+    const root = page.locator(
+      ".plugin-overlay-container .test-feed-refreshed-root",
+    );
+    await expect
+      .poll(async () => JSON.parse(await root.getAttribute("data-payload")), {
+        timeout: 10000,
+      })
+      .toMatchObject({
+        feedUri: "following",
+        newPostCount: 1,
+      });
   });
 });
 

@@ -14,8 +14,31 @@ export async function pluginFetch(
   if (!isFetchAllowed(url, plugin.permissions)) {
     throw new Error(`fetch to "${url}" not permitted`);
   }
+  return sandboxedFetch(url, init, {
+    forbiddenHeaders: FORBIDDEN_HEADERS,
+    maxBodyChars: MAX_BODY_CHARS,
+    fetchImpl,
+  });
+}
+
+// Shared hardening for any plugin-initiated fetch, regardless of which
+// permission model authorized the destination URL: method allowlist, a
+// caller-supplied forbidden-header set, a body-size cap, and the same
+// credential/redirect/referrer lockdown — only content-type is ever handed
+// back from the response. `forbiddenHeaders` differs by caller: ordinary
+// plugin fetch (pluginFetch, above) forbids Authorization (it could only
+// ever be forwarding an ambient credential the plugin has no business
+// touching) and Cookie; the user-approved single-endpoint path
+// (pluginConfiguredFetch.js) allows Authorization through, since there the
+// header value is the plugin's own credential for a URL a human explicitly
+// approved, not anything ambient.
+export async function sandboxedFetch(
+  url,
+  init,
+  { forbiddenHeaders, maxBodyChars, fetchImpl = fetch.bind(globalThis) },
+) {
   const response = await fetchImpl(url, {
-    ...sanitizeFetchInit(init),
+    ...sanitizeFetchInit(init, { forbiddenHeaders, maxBodyChars }),
     credentials: "omit",
     redirect: "error",
     mode: "cors",
@@ -30,7 +53,7 @@ export async function pluginFetch(
   };
 }
 
-function sanitizeFetchInit(init) {
+export function sanitizeFetchInit(init, { forbiddenHeaders, maxBodyChars }) {
   const safeInit = {};
   const method = (init?.method ?? "GET").toUpperCase();
   if (!ALLOWED_METHODS.includes(method)) {
@@ -40,7 +63,7 @@ function sanitizeFetchInit(init) {
   const headers = {};
   for (const [name, value] of Object.entries(init?.headers ?? {})) {
     const lowerName = String(name).toLowerCase();
-    if (FORBIDDEN_HEADERS.includes(lowerName)) {
+    if (forbiddenHeaders.includes(lowerName)) {
       throw new Error(`fetch header "${name}" not permitted`);
     }
     headers[name] = String(value);
@@ -50,7 +73,7 @@ function sanitizeFetchInit(init) {
     if (typeof init.body !== "string") {
       throw new Error("fetch body must be a string");
     }
-    if (init.body.length > MAX_BODY_CHARS) {
+    if (init.body.length > maxBodyChars) {
       throw new Error("fetch body too large");
     }
     safeInit.body = init.body;

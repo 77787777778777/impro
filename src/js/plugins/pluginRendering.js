@@ -134,6 +134,7 @@ const ALLOWED_ATTRS = [
   "for",
   "id",
   "href",
+  "accept",
 ];
 
 function isSafeHref(value) {
@@ -167,6 +168,35 @@ function createVirtualEvent(e) {
   return {
     type: e.type,
     target: virtualTarget,
+  };
+}
+
+function isFileInput(element) {
+  return (
+    element.tagName === "INPUT" &&
+    element.getAttribute("type")?.toLowerCase() === "file"
+  );
+}
+
+// A file input's real DOM `.value` is a useless fake path
+// ("C:\fakepath\..."), and its actual selection (`.files`) can never be
+// handed to the plugin directly — the plugin runs in a sandboxed Worker
+// with no way to receive a File over postMessage the way this codebase's
+// RPC is structured, and doing so would defeat the point of routing all
+// binary asset handling through host-side validation anyway. Instead the
+// host — which already has direct DOM access to the real File the instant
+// this event fires — stages it and hands the plugin only an opaque token
+// (see pluginFileStaging.js), shaped into `target.value` so a plugin reads
+// it exactly like any other input via the ordinary onChange(event) API.
+function createFileChangeEvent(pluginService, pluginId, element) {
+  const file = element.files?.[0] ?? null;
+  if (!file || !pluginService?.pluginFileStaging) {
+    return { type: "change", target: {} };
+  }
+  const token = pluginService.pluginFileStaging.stage(pluginId, file);
+  return {
+    type: "change",
+    target: { value: token, fileName: file.name, fileSize: file.size },
   };
 }
 
@@ -704,10 +734,18 @@ export class PluginRenderer {
         element.addEventListener(name, (event) => {
           const currentId = element[HANDLER_MAP]?.[name];
           if (currentId == null) return;
+          const virtualEvent =
+            name === "change" && isFileInput(element)
+              ? createFileChangeEvent(
+                  this.renderContext?.pluginService,
+                  this.pluginId,
+                  element,
+                )
+              : createVirtualEvent(event);
           this.pluginBridge.handleNodeEvent(
             this.pluginId,
             currentId,
-            createVirtualEvent(event),
+            virtualEvent,
           );
         });
       }

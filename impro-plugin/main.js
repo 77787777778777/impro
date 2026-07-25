@@ -56,7 +56,8 @@ async function dispatchEvent(event, args) {
     case "post-unreposted":
     case "profile-followed":
     case "profile-unfollowed":
-    case "post-created": {
+    case "post-created":
+    case "feed-refreshed": {
       await invokeListeners(listeners, event, args);
       return null;
     }
@@ -191,10 +192,51 @@ class PluginData {
   }
 }
 
+// Lets a plugin store spritesheet images a user picks at runtime (via a
+// real <input type="file"> the plugin renders — see
+// TextComponent-style .onChange usage below), complementing
+// manifest.json's `images` array (bundled into the plugin's own repo at
+// publish time). Requires permissions.images: ["upload"] in the manifest.
+// `fileToken` is the opaque string a file input's onChange handler
+// receives as `event.target.value` — the host reads the actual File the
+// moment it's picked and hands the plugin only this token, never the raw
+// bytes (see pluginFileStaging.js on the host side).
+class CustomImages {
+  register({ name, frameWidth, frameHeight, frameCount, fileToken }) {
+    return hostCall("registerCustomImage", {
+      name,
+      frameWidth,
+      frameHeight,
+      frameCount,
+      fileToken,
+    });
+  }
+  list() {
+    return hostCall("listCustomImages");
+  }
+  delete(name) {
+    return hostCall("deleteCustomImage", { name });
+  }
+}
+
+// Lets a plugin write text to the system clipboard — e.g. a drafted reply
+// the user can paste wherever they like. Requires
+// permissions.clipboard: ["write"] in the manifest. There is no read
+// counterpart: a plugin can only hand the user text to paste, never read
+// what's already on their clipboard.
+class Clipboard {
+  write(text) {
+    return hostCall("copyToClipboard", { text: String(text) });
+  }
+}
+
 class App {
   constructor() {
     this.currentUser = null;
     this.data = new PluginData();
+    this.configuredEndpoint = new ConfiguredEndpoint();
+    this.customImages = new CustomImages();
+    this.clipboard = new Clipboard();
   }
   on(event, listener) {
     addEventListener(event, listener);
@@ -228,6 +270,30 @@ class App {
   }
   showMoreLikeThis(postUri, feedUri) {
     return hostCall("showMoreLikeThis", { postUri, feedUri });
+  }
+  likePost(uri) {
+    return hostCall("likePost", { uri, like: true });
+  }
+  unlikePost(uri) {
+    return hostCall("likePost", { uri, like: false });
+  }
+  repostPost(uri) {
+    return hostCall("repostPost", { uri, repost: true });
+  }
+  unrepostPost(uri) {
+    return hostCall("repostPost", { uri, repost: false });
+  }
+  followActor(did) {
+    return hostCall("followActor", { did, follow: true });
+  }
+  unfollowActor(did) {
+    return hostCall("followActor", { did, follow: false });
+  }
+  bookmarkPost(uri) {
+    return hostCall("bookmarkPost", { uri, bookmark: true });
+  }
+  unbookmarkPost(uri) {
+    return hostCall("bookmarkPost", { uri, bookmark: false });
   }
 }
 
@@ -272,6 +338,38 @@ class PluginResponse {
   }
   async json() {
     return JSON.parse(this._body);
+  }
+}
+
+// Lets a plugin send requests to a single network address a human has
+// personally typed into that plugin's own settings and approved — not a
+// manifest-declared allowlist like the ordinary top-level fetch() export,
+// and not "any host": requestUrl() always re-prompts the user with the
+// exact address before it takes effect, and fetch() only ever succeeds
+// against that one approved origin. Requires
+// permissions.network: ["configuredEndpoint"] in the manifest. Unlike
+// ordinary fetch(), an Authorization header is allowed through, since it's
+// the plugin's own credential for a URL the user explicitly approved (e.g.
+// an API key for a self-hosted or cloud LLM endpoint), not anything ambient.
+class ConfiguredEndpoint {
+  // The currently-approved URL, or null if none has been approved yet (or
+  // it was cleared, e.g. by uninstalling and reinstalling the plugin).
+  getUrl() {
+    return hostCall("getConfiguredEndpointUrl");
+  }
+  // Prompts the user to approve `url` as this plugin's one allowed network
+  // address. Resolves to { accepted, url }: `url` is the *current* approved
+  // address (which may be unchanged from before if the user declined), and
+  // `accepted` reflects whether this particular request was granted.
+  requestUrl(url) {
+    return hostCall("requestConfiguredEndpointUrl", { url: String(url) });
+  }
+  async fetch(url, init = {}) {
+    const result = await hostCall("configuredFetch", {
+      url,
+      init: serializeFetchInit(init),
+    });
+    return new PluginResponse(result);
   }
 }
 

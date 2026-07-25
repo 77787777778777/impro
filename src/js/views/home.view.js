@@ -146,8 +146,25 @@ class HomeView extends View {
         window.scrollTo({ top: -1, behavior: "smooth" });
       }
       state.$isReloadingFeed.set(true);
+      const currentFeedUri = state.$currentFeedUri.get();
+      // Captured before the reload so newPostCount reflects what actually
+      // changed, not just the reloaded page's raw length.
+      const previousUris = new Set(
+        (dataLayer.derived.$hydratedFeeds.get(currentFeedUri)?.feed ?? []).map(
+          (item) => item.post.uri,
+        ),
+      );
       try {
         await loadCurrentFeed({ reload: true });
+        const refreshedFeed =
+          dataLayer.derived.$hydratedFeeds.get(currentFeedUri);
+        const newPostCount = (refreshedFeed?.feed ?? []).filter(
+          (item) => !previousUris.has(item.post.uri),
+        ).length;
+        pluginService.broadcastEvent("feed-refreshed", {
+          feedUri: currentFeedUri,
+          newPostCount,
+        });
       } finally {
         state.$isReloadingFeed.set(false);
       }

@@ -519,6 +519,48 @@ describe("SourceProvider.getCacheUrls with fonts", () => {
   });
 });
 
+describe("SourceProvider.getCacheUrls with images", () => {
+  it("includes each declared image URL", async () => {
+    // Regression test: getCacheUrls used to reference an undefined `urls`
+    // variable in the images loop, throwing a ReferenceError that was
+    // silently swallowed by the enclosing empty catch — so bundled
+    // spritesheet PNGs were never included in the cache's "wanted" URL set
+    // and stayed permanently eligible for eviction.
+    const pluginCache = fakePluginCache(async () =>
+      jsonResponse({
+        id: "alpha",
+        name: "A",
+        version: "1.2.3",
+        images: [
+          {
+            name: "idle",
+            file: "assets/idle.png",
+            frameWidth: 128,
+            frameHeight: 128,
+            frameCount: 15,
+          },
+          {
+            name: "walk",
+            file: "assets/walk.png",
+            frameWidth: 128,
+            frameHeight: 128,
+            frameCount: 15,
+          },
+        ],
+      }),
+    );
+    const provider = new SourceProvider(pluginCache);
+    const urls = await provider.getCacheUrls("alpha", "1.2.3", "ow/alpha");
+    assert.deepEqual(urls, [
+      "https://raw.githubusercontent.com/ow/alpha/refs/tags/1.2.3/manifest.json",
+      "https://raw.githubusercontent.com/ow/alpha/refs/tags/1.2.3/main.js",
+      "https://raw.githubusercontent.com/ow/alpha/refs/tags/1.2.3/styles.css",
+      "https://raw.githubusercontent.com/ow/alpha/refs/tags/1.2.3/assets/idle.png",
+      "https://raw.githubusercontent.com/ow/alpha/refs/tags/1.2.3/assets/walk.png",
+    ]);
+  });
+});
+
 // tangled.org's own HTTP endpoints don't set CORS headers, so
 // SourceProvider resolves tangled: repos entirely through standard AT
 // Protocol infrastructure instead: resolveHandle -> plc.directory ->
