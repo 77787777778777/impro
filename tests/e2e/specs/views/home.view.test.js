@@ -1416,6 +1416,27 @@ test.describe("Home view", () => {
     await expect(page).toHaveURL("/");
   });
 
+  test("should prefill the post composer from the /intent/compose text param", async ({
+    page,
+  }) => {
+    const mockServer = new MockServer();
+    await mockServer.setup(page);
+
+    await login(page);
+
+    await page.goto(
+      `/intent/compose?text=${encodeURIComponent("Hello from an intent #test")}`,
+    );
+
+    const composer = page.locator("post-composer .post-composer");
+    await expect(composer).toBeVisible({ timeout: 10000 });
+    await expect(composer.locator(".rich-text-input")).toHaveText(
+      "Hello from an intent #test",
+    );
+
+    await expect(page).toHaveURL("/");
+  });
+
   test.describe("Show Less / Show More feedback", () => {
     test("should send Show Less interaction and show feedback message", async ({
       page,

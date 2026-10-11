@@ -385,7 +385,13 @@ export default async function homeView({
   // so revisiting the cached page doesn't reopen it.
   if (window.location.pathname === "/intent/compose" && isAuthenticated) {
     dataLayer.declarative.ensureCurrentUser().then((currentUser) => {
-      postComposerService.composePost({ currentUser });
+      const initialText = new URLSearchParams(window.location.search).get(
+        "text",
+      );
+      postComposerService.composePost({
+        currentUser,
+        initialText,
+      });
       window.history.replaceState(null, "", "/");
     });
   }

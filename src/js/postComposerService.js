@@ -19,6 +19,7 @@ export class PostComposerService {
     replyTo = null,
     replyRoot = null,
     quotedPost = null,
+    initialText = null,
   }) {
     if (!currentUser) {
       console.warn("composePost: No current user");
@@ -113,6 +114,12 @@ export class PostComposerService {
       // can't wait on plugin init before opening
       this.currentPostComposer.open();
       const composer = this.currentPostComposer;
+      if (initialText) {
+        composer.applyComposerInit({
+          text: initialText,
+          cursor: initialText.length,
+        });
+      }
       if (!replyTo) {
         // Set default interaction settings from preferences
         this.dataLayer.preferencesProvider
