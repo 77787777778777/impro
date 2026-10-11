@@ -1,5 +1,9 @@
 import { deepClone, SimpleUUID } from "/js/utils.js";
-import { pinPostInFeed, unpinPostInFeed } from "/js/dataHelpers.js";
+import {
+  pinPostInFeed,
+  unpinPostInFeed,
+  replaceQuotedPost,
+} from "/js/dataHelpers.js";
 import { Signal, SignalMap, ReactiveStore } from "/js/signals.js";
 
 // The store saves patch data for optimistic updates.
@@ -127,6 +131,8 @@ export class PatchStore extends ReactiveStore {
             embeddingDisabled: patchBody.embeddingDisabled,
           },
         };
+      case "setQuotedPost":
+        return replaceQuotedPost(post, patchBody.quotedPost);
       case "setThreadgateAllow": {
         const record = {
           $type: "app.bsky.feed.threadgate",

@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { Mutations } from "/js/dataLayer/mutations.js";
+import { Mutations, DetachedQuoteLimitError } from "/js/dataLayer/mutations.js";
 import { DataStore } from "/js/dataLayer/dataStore.js";
 import { createSessionState } from "/js/dataLayer/sessionState.js";
 import { DraftMediaStore } from "/js/drafts.js";
@@ -3155,6 +3155,300 @@ describe("updatePostgateEmbeddingRules", () => {
     await assert.rejects(
       () => mutations.updatePostgateEmbeddingRules(foreignPost, [disableRule]),
       /post author/,
+    );
+  });
+});
+
+describe("toggleQuoteDetachment", () => {
+  const userDid = "did:plc:me";
+  const quotedPostUri = `at://${userDid}/app.bsky.feed.post/abc`;
+  const quotingPostUri = "at://did:plc:other/app.bsky.feed.post/quote1";
+  const quotedViewRecord = {
+    $type: "app.bsky.embed.record#viewRecord",
+    uri: quotedPostUri,
+    cid: "cid-abc",
+    author: { did: userDid, handle: "me.test" },
+    value: { text: "original" },
+  };
+  const detachedQuote = {
+    $type: "app.bsky.embed.record#viewDetached",
+    uri: quotedPostUri,
+    detached: true,
+  };
+  const quotedPost = {
+    uri: quotedPostUri,
+    cid: "cid-abc",
+    author: { did: userDid, handle: "me.test" },
+    record: { text: "original" },
+  };
+  const disableRule = { $type: "app.bsky.feed.postgate#disableRule" };
+
+  function quotingPostWith(record) {
+    return {
+      uri: quotingPostUri,
+      cid: "cid-quote",
+      author: { did: "did:plc:other", handle: "other.test", viewer: {} },
+      record: { text: "look" },
+      embed: { $type: "app.bsky.embed.record#view", record },
+      viewer: {},
+    };
+  }
+
+  function recordNotFoundError() {
+    return new ApiError({
+      status: 400,
+      statusText: "Bad Request",
+      data: { error: "RecordNotFound" },
+      headers: {},
+      url: "",
+    });
+  }
+
+  function setup(mockApi, quotingPost) {
+    const dataStore = new DataStore(createSessionState(null));
+    const patchStore = new PatchStore();
+    const mockPreferencesProvider = {
+      requirePreferences: () => Preferences.createLoggedOutPreferences(),
+    };
+    dataStore.$currentUser.set({ did: userDid, handle: "me.test" });
+    dataStore.$posts.set(quotingPost.uri, quotingPost);
+    return {
+      mutations: makeMutations(
+        mockApi,
+        dataStore,
+        patchStore,
+        mockPreferencesProvider,
+      ),
+      dataStore,
+      patchStore,
+    };
+  }
+
+  it("creates a record and detaches the embed when there is no prior record", async () => {
+    let putArgs = null;
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    const mockApi = {
+      getPostgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putPostgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-gate" };
+      },
+    };
+    const { mutations, dataStore, patchStore } = setup(mockApi, quotingPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, true);
+
+    assert.deepEqual(putArgs.rkey, "abc");
+    assert.deepEqual(putArgs.swapRecord, null);
+    assert.deepEqual(putArgs.record.post, quotedPostUri);
+    assert.deepEqual(putArgs.record.detachedEmbeddingUris, [quotingPostUri]);
+    assert.deepEqual(
+      dataStore.$posts.get(quotingPostUri).embed.record,
+      detachedQuote,
+    );
+    assert.deepEqual(patchStore.$postPatches.get(quotingPostUri), []);
+  });
+
+  it("applies the detached embed optimistically before the write lands", async () => {
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    let patchesDuringWrite = null;
+    const mockApi = {
+      getPostgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putPostgateRecord: async () => {
+        patchesDuringWrite = patchStore.$postPatches.get(quotingPostUri);
+        return { cid: "cid-gate" };
+      },
+    };
+    const { mutations, patchStore } = setup(mockApi, quotingPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, true);
+
+    assert.deepEqual(patchesDuringWrite.length, 1);
+    const patched = patchStore.applyPostPatches(
+      quotingPost,
+      patchesDuringWrite,
+    );
+    assert.deepEqual(patched.embed.record, detachedQuote);
+  });
+
+  it("merges into the prior record, preserving embeddingRules", async () => {
+    let putArgs = null;
+    const otherUri = "at://did:plc:third/app.bsky.feed.post/quote2";
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    const mockApi = {
+      getPostgateRecord: async () => ({
+        cid: "cid-prior",
+        value: {
+          $type: "app.bsky.feed.postgate",
+          post: quotedPostUri,
+          embeddingRules: [disableRule],
+          detachedEmbeddingUris: [otherUri],
+        },
+      }),
+      putPostgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-next" };
+      },
+    };
+    const { mutations } = setup(mockApi, quotingPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, true);
+
+    assert.deepEqual(putArgs.swapRecord, "cid-prior");
+    assert.deepEqual(putArgs.record.embeddingRules, [disableRule]);
+    assert.deepEqual(putArgs.record.detachedEmbeddingUris, [
+      otherUri,
+      quotingPostUri,
+    ]);
+  });
+
+  it("rejects detaching past the cap without writing", async () => {
+    let putCalled = false;
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    const fullUris = Array.from(
+      { length: 50 },
+      (_, i) => `at://did:plc:third/app.bsky.feed.post/q${i}`,
+    );
+    const mockApi = {
+      getPostgateRecord: async () => ({
+        cid: "cid-prior",
+        value: {
+          $type: "app.bsky.feed.postgate",
+          post: quotedPostUri,
+          detachedEmbeddingUris: fullUris,
+        },
+      }),
+      putPostgateRecord: async () => {
+        putCalled = true;
+        return { cid: "x" };
+      },
+    };
+    const { mutations, dataStore, patchStore } = setup(mockApi, quotingPost);
+
+    await assert.rejects(
+      () => mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, true),
+      DetachedQuoteLimitError,
+    );
+    assert.deepEqual(putCalled, false);
+    assert.deepEqual(patchStore.$postPatches.get(quotingPostUri), []);
+    assert.deepEqual(
+      dataStore.$posts.get(quotingPostUri).embed.record,
+      quotedViewRecord,
+    );
+  });
+
+  it("re-attaches by removing the uri and restoring the cached quote", async () => {
+    let putArgs = null;
+    const quotingPost = quotingPostWith(detachedQuote);
+    const mockApi = {
+      getPostgateRecord: async () => ({
+        cid: "cid-prior",
+        value: {
+          $type: "app.bsky.feed.postgate",
+          post: quotedPostUri,
+          embeddingRules: [disableRule],
+          detachedEmbeddingUris: [quotingPostUri],
+        },
+      }),
+      putPostgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-next" };
+      },
+    };
+    const { mutations, dataStore } = setup(mockApi, quotingPost);
+    dataStore.$embeddedPosts.set(quotedPostUri, quotedPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, false);
+
+    assert.deepEqual(putArgs.record.detachedEmbeddingUris, []);
+    assert.deepEqual(putArgs.record.embeddingRules, [disableRule]);
+    const restored = dataStore.$posts.get(quotingPostUri).embed.record;
+    assert.deepEqual(restored.$type, "app.bsky.embed.record#viewRecord");
+    assert.deepEqual(restored.uri, quotedPostUri);
+    assert.deepEqual(restored.value, { text: "original" });
+  });
+
+  it("fetches the quoted post after re-attaching when it isn't cached", async () => {
+    const quotingPost = quotingPostWith(detachedQuote);
+    const mockApi = {
+      getPostgateRecord: async () => ({
+        cid: "cid-prior",
+        value: {
+          $type: "app.bsky.feed.postgate",
+          post: quotedPostUri,
+          detachedEmbeddingUris: [quotingPostUri],
+        },
+      }),
+      putPostgateRecord: async () => ({ cid: "cid-next" }),
+      getPost: async () => quotedPost,
+    };
+    const { mutations, dataStore } = setup(mockApi, quotingPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, false);
+
+    const restored = dataStore.$posts.get(quotingPostUri).embed.record;
+    assert.deepEqual(restored.$type, "app.bsky.embed.record#viewRecord");
+    assert.deepEqual(restored.uri, quotedPostUri);
+  });
+
+  it("skips the write when re-attaching with no prior record", async () => {
+    let putCalled = false;
+    const quotingPost = quotingPostWith(detachedQuote);
+    const mockApi = {
+      getPostgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putPostgateRecord: async () => {
+        putCalled = true;
+        return { cid: "x" };
+      },
+      getPost: async () => quotedPost,
+    };
+    const { mutations } = setup(mockApi, quotingPost);
+
+    await mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, false);
+
+    assert.deepEqual(putCalled, false);
+  });
+
+  it("removes the patch and rethrows on failure", async () => {
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    const mockApi = {
+      getPostgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putPostgateRecord: async () => {
+        throw new Error("network down");
+      },
+    };
+    const { mutations, dataStore, patchStore } = setup(mockApi, quotingPost);
+
+    await assert.rejects(
+      () => mutations.toggleQuoteDetachment(quotingPost, quotedPostUri, true),
+      /network down/,
+    );
+    assert.deepEqual(patchStore.$postPatches.get(quotingPostUri), []);
+    assert.deepEqual(
+      dataStore.$posts.get(quotingPostUri).embed.record,
+      quotedViewRecord,
+    );
+  });
+
+  it("refuses to write for a quoted post the user doesn't own", async () => {
+    const quotingPost = quotingPostWith(quotedViewRecord);
+    const { mutations } = setup({}, quotingPost);
+    await assert.rejects(
+      () =>
+        mutations.toggleQuoteDetachment(
+          quotingPost,
+          "at://did:plc:other/app.bsky.feed.post/abc",
+          true,
+        ),
+      /quoted post's author/,
     );
   });
 });

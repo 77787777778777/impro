@@ -1112,6 +1112,47 @@ export function buildPostgateEmbeddingRules(quotesEnabled) {
   return quotesEnabled ? null : [{ $type: DISABLE_EMBEDDING_RULE_TYPE }];
 }
 
+export const MAX_DETACHED_EMBEDDING_URIS = 50;
+
+export function createDetachedQuote(uri) {
+  return { $type: "app.bsky.embed.record#viewDetached", uri, detached: true };
+}
+
+// Returns the quote embed of `post` if it embeds a post authored by `did`,
+// as `{ uri, isDetached }`, or null otherwise.
+export function getOwnQuoteEmbed(post, did) {
+  const quotedPost = getQuotedPost(post);
+  if (!quotedPost) {
+    return null;
+  }
+  if (quotedPost.$type === "app.bsky.embed.record#viewDetached") {
+    return parseUri(quotedPost.uri).repo === did
+      ? { uri: quotedPost.uri, isDetached: true }
+      : null;
+  }
+  if (
+    quotedPost.$type === "app.bsky.embed.record#viewRecord" &&
+    quotedPost.author?.did === did
+  ) {
+    return { uri: quotedPost.uri, isDetached: false };
+  }
+  return null;
+}
+
+export function replaceQuotedPost(post, quotedPost) {
+  const embed = post.embed;
+  if (embed?.$type === "app.bsky.embed.record#view") {
+    return { ...post, embed: { ...embed, record: quotedPost } };
+  }
+  if (embed?.$type === "app.bsky.embed.recordWithMedia#view") {
+    return {
+      ...post,
+      embed: { ...embed, record: { ...embed.record, record: quotedPost } },
+    };
+  }
+  return post;
+}
+
 // Adds a feed item to the beginning of a feed, preserving pinned post position.
 export function addFeedItemToFeed(feedItem, feed) {
   const newFeed = [];

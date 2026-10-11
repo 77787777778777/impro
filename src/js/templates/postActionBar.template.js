@@ -16,6 +16,7 @@ import {
   getRKey,
   canReplyToPost,
   getFeedGeneratorProxyUrl,
+  getOwnQuoteEmbed,
 } from "/js/dataHelpers.js";
 import { richTextToString } from "/js/facetHelpers.js";
 import { SignInModal } from "/js/modals/signIn.modal.js";
@@ -54,6 +55,7 @@ function postContextMenuTemplate({
   isAuthenticated,
   isUserPost,
   isPinnedToProfile,
+  ownQuoteEmbed,
   enableFeedFeedback,
   feedContext,
   pluginItems,
@@ -67,9 +69,11 @@ function postContextMenuTemplate({
   onClickDelete,
   onClickPin,
   onClickEditInteractionSettings,
+  onClickToggleQuoteDetachment,
 }) {
   const canPin = isUserPost && !post.record?.reply;
   const canEditInteractionSettings = isUserPost && !post.record?.reply;
+  const canHidePostForMe = !post.viewer?.isHidden;
   const pluginGroups = [...groupBy(pluginItems, "pluginId").values()];
   return html`
     ${isAuthenticated && canPin
@@ -154,16 +158,44 @@ function postContextMenuTemplate({
           </context-menu-item-group>
           ${!isUserPost
             ? html`
-                ${!post.viewer?.isHidden
+                ${canHidePostForMe || ownQuoteEmbed
                   ? html`
                       <context-menu-item-group>
-                        <context-menu-item
-                          data-testid="menu-action-post-hide"
-                          icon="eye-off-line"
-                          @click=${() => onClickHidePost(post)}
-                        >
-                          Hide ${post.record?.reply ? "reply" : "post"} for me
-                        </context-menu-item>
+                        ${canHidePostForMe
+                          ? html`
+                              <context-menu-item
+                                data-testid="menu-action-post-hide"
+                                icon="eye-off-line"
+                                @click=${() => onClickHidePost(post)}
+                              >
+                                Hide ${post.record?.reply ? "reply" : "post"}
+                                for me
+                              </context-menu-item>
+                            `
+                          : null}
+                        ${ownQuoteEmbed
+                          ? html`
+                              <context-menu-item
+                                data-testid="menu-action-post-toggle-quote-detachment"
+                                data-teststate=${ownQuoteEmbed.isDetached
+                                  ? "detached"
+                                  : "attached"}
+                                icon=${ownQuoteEmbed.isDetached
+                                  ? "eye-line"
+                                  : "eye-off-line"}
+                                @click=${() =>
+                                  onClickToggleQuoteDetachment(
+                                    post,
+                                    ownQuoteEmbed.uri,
+                                    !ownQuoteEmbed.isDetached,
+                                  )}
+                              >
+                                ${ownQuoteEmbed.isDetached
+                                  ? "Re-attach quote"
+                                  : "Detach quote"}
+                              </context-menu-item>
+                            `
+                          : null}
                       </context-menu-item-group>
                     `
                   : null}
@@ -403,6 +435,7 @@ export function postActionBarTemplate({
   onClickReport = noop,
   onClickPin = noop,
   onClickEditInteractionSettings = noop,
+  onClickToggleQuoteDetachment = noop,
   enableFeedFeedback = false,
   pluginService,
 }) {
@@ -416,6 +449,9 @@ export function postActionBarTemplate({
   const isBookmarked = !!post.viewer?.bookmarked;
   const canQuotePost = !post.viewer?.embeddingDisabled;
   const canReply = canReplyToPost(post);
+  const ownQuoteEmbed = currentUser
+    ? getOwnQuoteEmbed(post, currentUser.did)
+    : null;
   return html`
     <div class="post-actions">
       <div class="post-actions-primary">
@@ -555,6 +591,7 @@ export function postActionBarTemplate({
                 isAuthenticated,
                 isUserPost,
                 isPinnedToProfile,
+                ownQuoteEmbed,
                 enableFeedFeedback,
                 feedContext,
                 feedGenerator,
@@ -569,6 +606,7 @@ export function postActionBarTemplate({
                 onClickDelete,
                 onClickPin,
                 onClickEditInteractionSettings,
+                onClickToggleQuoteDetachment,
               });
             }}
           >

@@ -317,6 +317,12 @@ export function largePostTemplate({
                   postInteractionHandler.handlePinPost(post, doPin),
                 onClickEditInteractionSettings: (post) =>
                   postInteractionHandler.handleEditInteractionSettings(post),
+                onClickToggleQuoteDetachment: (post, quotedPostUri, doDetach) =>
+                  postInteractionHandler.handleToggleQuoteDetachment(
+                    post,
+                    quotedPostUri,
+                    doDetach,
+                  ),
                 onClickReport: (post) =>
                   postInteractionHandler.handleReport(post),
                 pluginService,

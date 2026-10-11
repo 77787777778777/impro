@@ -258,6 +258,12 @@ export function smallPostTemplate({
               postInteractionHandler.handlePinPost(post, doPin),
             onClickEditInteractionSettings: (post) =>
               postInteractionHandler.handleEditInteractionSettings(post),
+            onClickToggleQuoteDetachment: (post, quotedPostUri, doDetach) =>
+              postInteractionHandler.handleToggleQuoteDetachment(
+                post,
+                quotedPostUri,
+                doDetach,
+              ),
             onClickReport: (post) => postInteractionHandler.handleReport(post),
             enableFeedFeedback,
             pluginService,

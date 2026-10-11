@@ -17,6 +17,10 @@ import {
   buildCdnUrl,
   getReplyRootFromPost,
   insertReplyIntoThread,
+  MAX_DETACHED_EMBEDDING_URIS,
+  createDetachedQuote,
+  createEmbedFromPost,
+  replaceQuotedPost,
 } from "/js/dataHelpers.js";
 import {
   addPostLanguagesToHistory,
@@ -31,6 +35,15 @@ import { getFacetsFromText } from "/js/facetHelpers.js";
 import { PostCreator } from "/js/postCreator.js";
 import { untrack } from "/js/signals.js";
 import { generateTid } from "/js/atproto.js";
+
+export class DetachedQuoteLimitError extends Error {
+  constructor() {
+    super(
+      `Posts can have at most ${MAX_DETACHED_EMBEDDING_URIS} detached quotes`,
+    );
+    this.name = "DetachedQuoteLimitError";
+  }
+}
 
 // Handles mutations to the data, making optimistic updates if needed.
 export class Mutations {
@@ -1927,6 +1940,94 @@ export class Mutations {
     } finally {
       this.patchStore.removePostPatch(post.uri, patchId);
     }
+  }
+
+  async toggleQuoteDetachment(quotingPost, quotedPostUri, detach) {
+    const currentUser = this.dataStore.$currentUser.get();
+    if (!currentUser) throw new Error("No current user");
+    const { repo, rkey } = parseUri(quotedPostUri);
+    if (currentUser.did !== repo) {
+      throw new Error("Only the quoted post's author can detach quotes");
+    }
+
+    let quotedPost = detach
+      ? createDetachedQuote(quotedPostUri)
+      : this._getCachedQuoteEmbed(quotedPostUri);
+    const patchId = quotedPost
+      ? this.patchStore.addPostPatch(quotingPost.uri, {
+          type: "setQuotedPost",
+          quotedPost,
+        })
+      : null;
+    try {
+      let priorPostgateRecord = null;
+      try {
+        priorPostgateRecord = await this.api.getPostgateRecord(rkey);
+      } catch (error) {
+        if (!isRecordNotFoundError(error)) throw error;
+      }
+      const priorUris = priorPostgateRecord?.value?.detachedEmbeddingUris ?? [];
+      if (priorPostgateRecord || detach) {
+        let detachedEmbeddingUris;
+        if (detach) {
+          if (
+            !priorUris.includes(quotingPost.uri) &&
+            priorUris.length >= MAX_DETACHED_EMBEDDING_URIS
+          ) {
+            throw new DetachedQuoteLimitError();
+          }
+          detachedEmbeddingUris = [
+            ...priorUris.filter((uri) => uri !== quotingPost.uri),
+            quotingPost.uri,
+          ];
+        } else {
+          detachedEmbeddingUris = priorUris.filter(
+            (uri) => uri !== quotingPost.uri,
+          );
+        }
+        await this.api.putPostgateRecord(
+          rkey,
+          {
+            ...priorPostgateRecord?.value,
+            $type: "app.bsky.feed.postgate",
+            post: quotedPostUri,
+            createdAt: getCurrentTimestamp(),
+            detachedEmbeddingUris,
+          },
+          priorPostgateRecord?.cid ?? null,
+        );
+      }
+
+      if (!quotedPost) {
+        try {
+          quotedPost = createEmbedFromPost(
+            await this.api.getPost(quotedPostUri),
+          );
+        } catch (error) {
+          console.warn("Failed to load re-attached quote", error);
+        }
+      }
+      const latestPost = this.dataStore.$posts.get(quotingPost.uri);
+      if (latestPost && quotedPost) {
+        this.dataStore.$posts.set(
+          quotingPost.uri,
+          replaceQuotedPost(latestPost, quotedPost),
+        );
+      }
+    } finally {
+      if (patchId !== null) {
+        this.patchStore.removePostPatch(quotingPost.uri, patchId);
+      }
+    }
+  }
+
+  _getCachedQuoteEmbed(postUri) {
+    const post = untrack(
+      () =>
+        this.dataStore.$posts.get(postUri) ??
+        this.dataStore.$embeddedPosts.get(postUri),
+    );
+    return post ? createEmbedFromPost(post) : null;
   }
 
   async updateThreadgateAllow(post, threadgateAllow) {

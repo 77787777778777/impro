@@ -2,7 +2,11 @@ import { hapticsImpactMedium } from "/js/haptics.js";
 import { showToast } from "/js/toasts.js";
 import { confirmModal } from "/js/modals/confirm.modal.js";
 import { html } from "/js/lib/lit-html.js";
-import { buildPostgateEmbeddingRules } from "/js/dataHelpers.js";
+import {
+  buildPostgateEmbeddingRules,
+  MAX_DETACHED_EMBEDDING_URIS,
+} from "/js/dataHelpers.js";
+import { DetachedQuoteLimitError } from "/js/dataLayer/mutations.js";
 import "/js/components/post-interaction-settings-dialog.js";
 import "/js/components/app-icon.js";
 
@@ -173,6 +177,45 @@ export class PostInteractionHandler {
         console.error(error);
         showToast("Failed to unpin post", { style: "error" });
       }
+    }
+  }
+
+  async handleToggleQuoteDetachment(post, quotedPostUri, doDetach) {
+    if (
+      doDetach &&
+      !(await confirmModal(
+        "This will remove your post from this quote post for all users, and replace it with a placeholder.",
+        {
+          title: "Detach quote post?",
+          confirmButtonText: "Detach",
+        },
+      ))
+    ) {
+      return;
+    }
+    try {
+      await this.dataLayer.mutations.toggleQuoteDetachment(
+        post,
+        quotedPostUri,
+        doDetach,
+      );
+      showToast(doDetach ? "Quote detached" : "Quote re-attached", {
+        style: "success",
+      });
+    } catch (error) {
+      if (error instanceof DetachedQuoteLimitError) {
+        console.warn(error);
+        showToast(
+          `You can detach at most ${MAX_DETACHED_EMBEDDING_URIS} quotes from a post`,
+          { style: "error" },
+        );
+        return;
+      }
+      console.error(error);
+      showToast(
+        doDetach ? "Failed to detach quote" : "Failed to re-attach quote",
+        { style: "error" },
+      );
     }
   }
 
