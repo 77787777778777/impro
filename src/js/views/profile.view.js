@@ -301,12 +301,14 @@ export default async function profileView({
       let isDefaultLabeler = profile.did === BSKY_LABELER_DID;
       let isSubscribed = false;
       let labelerSettings = null;
+      let isAdultContentEnabled = false;
       if (isLabeler) {
         const preferences = dataLayer.derived.$preferences.get();
         isSubscribed = isDefaultLabeler
           ? true
           : preferences?.isSubscribedToLabeler(profile.did);
         labelerSettings = dataLayer.derived.$labelerSettings.get(profile.did);
+        isAdultContentEnabled = preferences?.isAdultContentEnabled() ?? false;
       }
       return html`
         <div class="profile-container">
@@ -409,6 +411,7 @@ export default async function profileView({
                         profile,
                         isSubscribed,
                         labelerSettings,
+                        isAdultContentEnabled,
                         onClick: (label, visibility) =>
                           handleLabelerSettingsClick(
                             profile.did,

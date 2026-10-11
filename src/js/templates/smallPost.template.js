@@ -38,6 +38,7 @@ function contentWarningTemplate({
       className: "post-content-warning",
       labelDefinition: contentLabel.labelDefinition,
       labeler: contentLabel.labeler,
+      noOverride: contentLabel.noOverride,
       isAuthorLabel,
       children,
     });

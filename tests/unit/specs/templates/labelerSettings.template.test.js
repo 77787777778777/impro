@@ -242,3 +242,74 @@ describe("labelerSettingsTemplate - current settings", () => {
     assert.deepEqual(clickedValue, "hide");
   });
 });
+
+describe("labelerSettingsTemplate - adult-only labels", () => {
+  const adultLabelerInfo = {
+    ...mockLabelerInfo,
+    policies: {
+      labelValueDefinitions: [
+        {
+          identifier: "adult-custom",
+          blurs: "media",
+          severity: "none",
+          defaultSetting: "warn",
+          adultOnly: true,
+          locales: [{ lang: "en", name: "Adult Custom" }],
+        },
+      ],
+    },
+  };
+
+  function renderAdultLabelerSettings({ isAdultContentEnabled }) {
+    const container = document.createElement("div");
+    render(
+      labelerSettingsTemplate({
+        labelerInfo: adultLabelerInfo,
+        isSubscribed: true,
+        labelerSettings: [{ label: "adult-custom", visibility: "ignore" }],
+        isAdultContentEnabled,
+      }),
+      container,
+    );
+    return container;
+  }
+
+  it("should disable the controls and show hide when adult content is disabled", () => {
+    const container = renderAdultLabelerSettings({
+      isAdultContentEnabled: false,
+    });
+    const buttons = [
+      ...container.querySelectorAll("[data-testid='label-pref-button']"),
+    ];
+    assert(buttons.every((button) => button.disabled));
+    const activeButton = buttons.find((button) =>
+      button.classList.contains("active"),
+    );
+    assert.deepEqual(activeButton.dataset.teststate, "hide");
+    assert(
+      container.querySelector(
+        "[data-testid='label-preference-adult-disabled']",
+      ) !== null,
+    );
+  });
+
+  it("should allow configuring the label when adult content is enabled", () => {
+    const container = renderAdultLabelerSettings({
+      isAdultContentEnabled: true,
+    });
+    const buttons = [
+      ...container.querySelectorAll("[data-testid='label-pref-button']"),
+    ];
+    assert(buttons.every((button) => !button.disabled));
+    const activeButton = buttons.find((button) =>
+      button.classList.contains("active"),
+    );
+    assert.deepEqual(activeButton.dataset.teststate, "off");
+    assert.deepEqual(
+      container.querySelector(
+        "[data-testid='label-preference-adult-disabled']",
+      ),
+      null,
+    );
+  });
+});

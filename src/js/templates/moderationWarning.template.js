@@ -8,6 +8,7 @@ export function moderationWarningTemplate({
   isAuthorLabel,
   labelDefinition,
   labeler,
+  noOverride,
   children,
 }) {
   let { name: labelName } = getLabelNameAndDescription(labelDefinition);
@@ -20,6 +21,7 @@ export function moderationWarningTemplate({
   return html`<moderation-warning
     class=${classnames("post-moderation-warning", className)}
     data-teststate="label"
+    ?no-override=${noOverride}
     @click=${(e) => {
       const clickedBar = !!e.target.closest(".top-bar");
       if (clickedBar) {

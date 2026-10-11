@@ -60,6 +60,12 @@ function getContentTextFromEmbed(embed) {
   return texts;
 }
 
+// Locked (no-override) labels outrank user-revealable hides, which outrank warns
+function getBlurEntryRank(entry) {
+  if (entry.noOverride) return 2;
+  return entry.visibility === "hide" ? 1 : 0;
+}
+
 const MAX_RECENT_SEARCHES = 5;
 const MAX_RECENT_SEARCH_PROFILES = 10;
 const MAX_RECENT_SEARCH_QUERY_LENGTH = 300;
@@ -382,11 +388,35 @@ export class Preferences {
     if (labelDefinition.configurable === false) {
       return getDefaultLabelSetting(labelDefinition);
     }
+    if (this.isAdultLabelDisabled(labelDefinition)) {
+      return "hide";
+    }
     const pref = this.getContentLabelPref({
       label: label.val,
       labelerDid: isGlobalLabel(label.val) ? null : label.src,
     });
     return pref?.visibility ?? getDefaultLabelSetting(labelDefinition);
+  }
+
+  isAdultContentEnabled() {
+    const adultContentPreference = Preferences.getAdultContentPreference(
+      this.obj,
+    );
+    return adultContentPreference?.enabled ?? false;
+  }
+
+  isAdultLabelDisabled(labelDefinition) {
+    return !!labelDefinition.adultOnly && !this.isAdultContentEnabled();
+  }
+
+  _createBlurLabelEntry(visibility, label, labelDefinition, labeler) {
+    return {
+      visibility,
+      label,
+      labelDefinition,
+      labeler,
+      noOverride: this.isAdultLabelDisabled(labelDefinition),
+    };
   }
 
   getLabelDefinitionAndLabeler(label) {
@@ -473,16 +503,21 @@ export class Preferences {
       const { labelDefinition, labeler } = result;
       if (labelDefinition.blurs !== blurType) continue;
       const labelVisibility = this.getLabelVisibility(label, labelDefinition);
-      if (labelVisibility === "hide") {
-        return { visibility: "hide", label, labelDefinition, labeler };
+      if (labelVisibility !== "hide" && labelVisibility !== "warn") continue;
+      const entry = this._createBlurLabelEntry(
+        labelVisibility,
+        label,
+        labelDefinition,
+        labeler,
+      );
+      if (entry.noOverride) {
+        return entry;
       }
-      if (labelVisibility === "warn" && !currentLabel) {
-        currentLabel = {
-          visibility: labelVisibility,
-          label,
-          labelDefinition,
-          labeler,
-        };
+      if (
+        !currentLabel ||
+        getBlurEntryRank(entry) > getBlurEntryRank(currentLabel)
+      ) {
+        currentLabel = entry;
       }
     }
     return currentLabel;
@@ -510,12 +545,20 @@ export class Preferences {
         continue;
       }
       const visibility = this.getLabelVisibility(label, labelDefinition);
-      if (visibility === "ignore") continue;
-      const entry = { visibility, label, labelDefinition, labeler };
-      if (visibility === "hide") {
+      if (visibility !== "hide" && visibility !== "warn") continue;
+      const entry = this._createBlurLabelEntry(
+        visibility,
+        label,
+        labelDefinition,
+        labeler,
+      );
+      if (entry.noOverride) {
         return entry;
       }
-      if (visibility === "warn" && !currentLabel) {
+      if (
+        !currentLabel ||
+        getBlurEntryRank(entry) > getBlurEntryRank(currentLabel)
+      ) {
         currentLabel = entry;
       }
     }
@@ -839,6 +882,13 @@ export class Preferences {
     return Preferences.getPreferenceByType(
       obj,
       "app.bsky.actor.defs#labelersPref",
+    );
+  }
+
+  static getAdultContentPreference(obj) {
+    return Preferences.getPreferenceByType(
+      obj,
+      "app.bsky.actor.defs#adultContentPref",
     );
   }
 

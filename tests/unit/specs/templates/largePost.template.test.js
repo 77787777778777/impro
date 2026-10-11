@@ -330,6 +330,56 @@ describe("largePostTemplate - moderation", () => {
     assert.deepEqual(warning.getAttribute("icon-style"), "closed-eye");
   });
 
+  it("should show an adult-only content label as a warning instead of a badge", () => {
+    const labeledPost = {
+      ...post,
+      contentLabel: {
+        visibility: "warn",
+        label: { src: "did:plc:labeler", val: "adult-custom", uri: post.uri },
+        labelDefinition: {
+          identifier: "adult-custom",
+          blurs: "content",
+          adultOnly: true,
+          locales: [{ lang: "en", name: "Adult Custom" }],
+        },
+        labeler: null,
+        noOverride: true,
+      },
+    };
+    const result = largePostTemplate({ post: labeledPost, ...baseProps });
+    const container = document.createElement("div");
+    render(result, container);
+    const warning = container.querySelector("moderation-warning");
+    assert(warning !== null);
+    assert(warning.hasAttribute("no-override"));
+    assert(warning.querySelector(".post-body") !== null);
+  });
+
+  it("should show an overridable adult-only content label as a badge", () => {
+    const labeledPost = {
+      ...post,
+      contentLabel: {
+        visibility: "warn",
+        label: { src: "did:plc:labeler", val: "adult-custom", uri: post.uri },
+        labelDefinition: {
+          identifier: "adult-custom",
+          blurs: "content",
+          adultOnly: true,
+          locales: [{ lang: "en", name: "Adult Custom" }],
+        },
+        labeler: {
+          creator: { did: "did:plc:labeler", handle: "labeler.test" },
+        },
+        noOverride: false,
+      },
+    };
+    const result = largePostTemplate({ post: labeledPost, ...baseProps });
+    const container = document.createElement("div");
+    render(result, container);
+    assert.deepEqual(container.querySelector("moderation-warning"), null);
+    assert(container.querySelector("[data-testid='label-badge']") !== null);
+  });
+
   it("should not show moderation warning for normal post", () => {
     const normalPost = {
       ...post,

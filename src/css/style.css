@@ -10211,6 +10211,16 @@ moderation-warning .toggle-content {
   line-height: 1.4;
 }
 
+.label-preference-disabled-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--text-color-muted);
+  font-size: 14px;
+  font-style: italic;
+}
+
 .label-preference-name + .label-preference-buttons {
   margin-top: 8px;
 }

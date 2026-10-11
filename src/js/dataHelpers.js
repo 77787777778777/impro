@@ -1005,6 +1005,7 @@ export const GLOBAL_LABELS = [
     defaultSetting: "warn",
     blurs: "media",
     severity: "none",
+    adultOnly: true,
     locales: [
       {
         lang: "en",
@@ -1020,6 +1021,7 @@ export const GLOBAL_LABELS = [
     defaultSetting: "warn",
     blurs: "media",
     severity: "none",
+    adultOnly: true,
     locales: [
       {
         lang: "en",

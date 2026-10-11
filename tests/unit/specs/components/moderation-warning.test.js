@@ -277,4 +277,26 @@ describe("moderation-warning", () => {
       assert.deepEqual(child.textContent, "Original");
     });
   });
+
+  describe("ModerationWarning - no override", () => {
+    it("should not render a show/hide toggle", () => {
+      const element = document.createElement("moderation-warning");
+      element.setAttribute("no-override", "");
+      element.setAttribute("label", "Adult Content");
+      document.body.appendChild(element);
+      const topBar = element.querySelector(".top-bar");
+      assert(topBar.textContent.includes("Adult Content"));
+      assert.deepEqual(topBar.getAttribute("role"), null);
+      assert.deepEqual(element.querySelector(".show-hide-label"), null);
+    });
+
+    it("should keep children hidden when the top bar is clicked", () => {
+      const element = document.createElement("moderation-warning");
+      element.setAttribute("no-override", "");
+      element.innerHTML = "<div class='test-child'>Hidden content</div>";
+      document.body.appendChild(element);
+      element.querySelector(".top-bar").click();
+      assert(element.querySelector(".toggle-content").hidden);
+    });
+  });
 });
