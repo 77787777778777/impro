@@ -3905,6 +3905,37 @@ image-carousel {
   align-items: center;
 }
 
+.notification-authors-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-color-muted);
+  cursor: pointer;
+}
+
+.notification-authors-toggle > app-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.notification-authors-hide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+}
+
+.notification-expanded-authors {
+  padding-bottom: 4px;
+}
+
+.notification-expanded-authors .profile-list-item {
+  padding: 6px 0;
+  border-bottom: none;
+}
+
 .notification-text .automated-account-badge {
   margin-left: 4px;
 }
@@ -3927,22 +3958,6 @@ image-carousel {
 
 .notification-text strong {
   font-weight: 600;
-}
-
-.notification-others-button {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .notification-others-button:hover {
-    text-decoration: underline;
-  }
 }
 
 .notification-time {
@@ -6347,6 +6362,41 @@ button.profile-list-item-button.is-disabled {
   align-self: center;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.profile-list-item-follow.is-compact {
+  gap: 3px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: transparent;
+  color: var(--text-color-muted);
+}
+
+.profile-list-item-follow.is-compact app-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.profile-list-item-follow.is-compact.rounded-button-primary {
+  background-color: color-mix(
+    in srgb,
+    var(--highlight-color) 15%,
+    var(--background-color)
+  );
+  color: var(--highlight-color);
+}
+
+@media (hover: hover) {
+  .profile-list-item-follow.is-compact.rounded-button-primary:not(
+      :disabled
+    ):hover {
+    background-color: color-mix(
+      in srgb,
+      var(--highlight-color) 25%,
+      var(--background-color)
+    );
+  }
 }
 
 .profile-list-item-skeleton-bio {
@@ -12629,12 +12679,6 @@ h2.setting-item-name {
     padding-bottom: 16px;
     padding-left: 24px;
   }
-}
-
-.bottom-sheet.profile-list-modal .profile-list-modal-body {
-  max-height: 60vh;
-  overflow-y: auto;
-  margin: 0 -24px;
 }
 
 .bottom-sheet.welcome-modal {

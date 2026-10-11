@@ -288,6 +288,83 @@ test.describe("Notifications view", () => {
     await expect(item.locator(".notification-avatar")).toHaveCount(3);
   });
 
+  test("should expand and collapse the author list of a grouped notification", async ({
+    page,
+  }) => {
+    const likedPost = createPost({
+      uri: "at://did:plc:testuser123/app.bsky.feed.post/popular1",
+      text: "Popular post",
+      authorHandle: "testuser.bsky.social",
+      authorDisplayName: "Test User",
+    });
+
+    const mockServer = new MockServer();
+    mockServer.addPosts([likedPost]);
+    mockServer.addNotifications(
+      [alice, bob, charlie].map((author) =>
+        createNotification({
+          reason: "like",
+          author,
+          reasonSubject: likedPost.uri,
+          indexedAt: new Date().toISOString(),
+        }),
+      ),
+    );
+    await mockServer.setup(page);
+
+    await login(page);
+    await page.goto("/notifications");
+
+    const view = page.locator("#notifications-view");
+    const item = view.locator(".notification-item");
+    await expect(item).toHaveCount(1, { timeout: 10000 });
+    const toggle = item.locator('[data-testid="notification-authors-toggle"]');
+    const expandedAuthors = item.locator(
+      '[data-testid="notification-expanded-authors"]',
+    );
+    await expect(expandedAuthors).toHaveCount(0);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("data-teststate", "expanded");
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(
+      expandedAuthors.locator('[data-testid="profile-list-item-handle"]'),
+    ).toHaveText([
+      "@alice.bsky.social",
+      "@bob.bsky.social",
+      "@charlie.bsky.social",
+    ]);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("data-teststate", "collapsed");
+    await expect(expandedAuthors).toHaveCount(0);
+    await expect(item.locator(".notification-avatar")).toHaveCount(3);
+  });
+
+  test("should not show an author list toggle for a single author", async ({
+    page,
+  }) => {
+    const mockServer = new MockServer();
+    mockServer.addNotifications([
+      createNotification({
+        reason: "follow",
+        author: alice,
+        indexedAt: new Date().toISOString(),
+      }),
+    ]);
+    await mockServer.setup(page);
+
+    await login(page);
+    await page.goto("/notifications");
+
+    const item = page.locator("#notifications-view .notification-item");
+    await expect(item).toHaveCount(1, { timeout: 10000 });
+    await expect(item.locator(".notification-avatar")).toHaveCount(1);
+    await expect(
+      item.locator('[data-testid="notification-authors-toggle"]'),
+    ).toHaveCount(0);
+  });
+
   test("should group multiple follows together", async ({ page }) => {
     const mockServer = new MockServer();
     mockServer.addNotifications([
@@ -756,7 +833,7 @@ test.describe("Notifications view", () => {
         "Alice",
       );
       await expect(
-        item.locator('[data-testid="notification-others-button"]'),
+        item.locator('[data-testid="notification-authors-toggle"]'),
       ).toBeVisible();
       const href = await item.getAttribute("href");
       const url = new URL(href, "http://localhost");
