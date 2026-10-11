@@ -841,11 +841,14 @@ test.describe("Profile view", () => {
     await view.locator(".ellipsis-button").click();
 
     const menu = page.locator(".profile-context-menu");
-    await expect(menu.locator("context-menu-item")).toHaveCount(7, {
+    await expect(menu.locator("context-menu-item")).toHaveCount(8, {
       timeout: 5000,
     });
     await expect(
       menu.locator('[data-testid="menu-action-profile-open-in-bsky"]'),
+    ).toBeVisible();
+    await expect(
+      menu.locator('[data-testid="menu-action-profile-mute-reposts"]'),
     ).toBeVisible();
     await expect(
       menu.locator('[data-testid="menu-action-profile-copy-link"]'),
@@ -903,6 +906,77 @@ test.describe("Profile view", () => {
         '[data-testid="menu-action-profile-mute"][data-teststate="unmuted"]',
       ),
     ).not.toBeVisible();
+  });
+
+  test("should hide and show reposts from the context menu", async ({
+    page,
+  }) => {
+    const mockServer = new MockServer();
+    mockServer.addProfile(otherUser);
+    await mockServer.setup(page);
+    await login(page);
+    await page.goto(`/profile/${otherUser.did}`);
+
+    const view = page.locator("#profile-view");
+    await expect(view.locator('[data-testid="profile-name"]')).toContainText(
+      "Other User",
+      { timeout: 10000 },
+    );
+    await expect(
+      view.locator('[data-testid="reposts-hidden-badge"]'),
+    ).not.toBeVisible();
+
+    const menu = page.locator(".profile-context-menu");
+    await view.locator(".ellipsis-button").click();
+    await menu
+      .locator(
+        '[data-testid="menu-action-profile-mute-reposts"][data-teststate="unmuted"]',
+      )
+      .click();
+
+    await expect(
+      view.locator('[data-testid="reposts-hidden-badge"]'),
+    ).toBeVisible({ timeout: 5000 });
+
+    await view.locator(".ellipsis-button").click();
+    await menu
+      .locator(
+        '[data-testid="menu-action-profile-mute-reposts"][data-teststate="muted"]',
+      )
+      .click();
+
+    await expect(
+      view.locator('[data-testid="reposts-hidden-badge"]'),
+    ).not.toBeVisible({ timeout: 5000 });
+  });
+
+  test("should not offer hiding reposts for fully muted profiles", async ({
+    page,
+  }) => {
+    const mutedUser = {
+      ...otherUser,
+      viewer: { ...otherUser.viewer, muted: true },
+    };
+    const mockServer = new MockServer();
+    mockServer.addProfile(mutedUser);
+    await mockServer.setup(page);
+    await login(page);
+    await page.goto(`/profile/${mutedUser.did}`);
+
+    const view = page.locator("#profile-view");
+    await expect(view.locator('[data-testid="profile-name"]')).toContainText(
+      "Other User",
+      { timeout: 10000 },
+    );
+    await view.locator(".ellipsis-button").click();
+
+    const menu = page.locator(".profile-context-menu");
+    await expect(
+      menu.locator('[data-testid="menu-action-profile-mute"]'),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      menu.locator('[data-testid="menu-action-profile-mute-reposts"]'),
+    ).toHaveCount(0);
   });
 
   test("should show 'Unblock Account' in context menu for blocked profiles", async ({

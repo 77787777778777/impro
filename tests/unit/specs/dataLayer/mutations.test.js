@@ -12,6 +12,7 @@ import { HiddenFeedItemsStore } from "/js/dataLayer/hiddenFeedItemsStore.js";
 import { CDN_URL } from "/js/config.js";
 import { ApiError } from "/js/api.js";
 import { trackDisposable } from "../../testHelpers.js";
+import { isBlockedPost } from "/js/dataHelpers.js";
 import { createPost } from "../../../shared/factories.js";
 
 function escapeRegExp(value) {
@@ -1883,6 +1884,85 @@ describe("unmuteProfile", () => {
   });
 });
 
+describe("muteProfileReposts / unmuteProfileReposts", () => {
+  const did = "did:plc:target";
+
+  function setup(mockApi = {}) {
+    const dataStore = new DataStore(createSessionState(null));
+    const patchStore = new PatchStore();
+    const mockPreferencesProvider = {
+      requirePreferences: () => Preferences.createLoggedOutPreferences(),
+    };
+    const mutations = makeMutations(
+      {
+        muteActorReposts: async () => ({}),
+        unmuteActor: async () => ({}),
+        ...mockApi,
+      },
+      dataStore,
+      patchStore,
+      mockPreferencesProvider,
+    );
+    return { mutations, dataStore, patchStore };
+  }
+
+  it("muteProfileReposts calls muteActorReposts and sets viewer.mutedOnlyReposts", async () => {
+    const muteActorReposts = mock.fn(async () => ({}));
+    const { mutations, dataStore } = setup({ muteActorReposts });
+
+    await mutations.muteProfileReposts({ did, viewer: {} });
+
+    assert.deepEqual(muteActorReposts.mock.calls[0].arguments, [did]);
+    assert.deepEqual(
+      dataStore.$profiles.get(did).viewer.mutedOnlyReposts,
+      true,
+    );
+  });
+
+  it("unmuteProfileReposts calls unmuteActor and clears viewer.mutedOnlyReposts", async () => {
+    const unmuteActor = mock.fn(async () => ({}));
+    const { mutations, dataStore } = setup({ unmuteActor });
+
+    await mutations.unmuteProfileReposts({
+      did,
+      viewer: { mutedOnlyReposts: true },
+    });
+
+    assert.deepEqual(unmuteActor.mock.calls[0].arguments, [did]);
+    assert.deepEqual(
+      dataStore.$profiles.get(did).viewer.mutedOnlyReposts,
+      false,
+    );
+  });
+
+  it("muteProfile replaces a reposts-only mute", async () => {
+    const { mutations, dataStore } = setup({ muteActor: async () => ({}) });
+
+    await mutations.muteProfile({ did, viewer: { mutedOnlyReposts: true } });
+
+    const viewer = dataStore.$profiles.get(did).viewer;
+    assert.deepEqual(viewer.muted, true);
+    assert.deepEqual(viewer.mutedOnlyReposts, false);
+  });
+
+  it("rethrows and clears the pending patch on failure", async (t) => {
+    t.mock.method(console, "error", () => {});
+    const { mutations, patchStore } = setup({
+      muteActorReposts: async () => {
+        throw new Error("boom");
+      },
+    });
+    await assert.rejects(
+      mutations.muteProfileReposts({ did, viewer: {} }),
+      /boom/,
+    );
+    assert.deepEqual(
+      patchStore.hasPendingProfilePatch(did, ["muteProfileReposts"]),
+      false,
+    );
+  });
+});
+
 describe("blockProfile", () => {
   const profile = {
     did: "did:plc:target",
@@ -1897,13 +1977,14 @@ describe("blockProfile", () => {
     const mockPreferencesProvider = {
       requirePreferences: () => Preferences.createLoggedOutPreferences(),
     };
+    const derived = makeDerived(dataStore, patchStore, mockPreferencesProvider);
     const mutations = makeMutations(
       { blockActor: async () => ({ uri: blockUri }), ...mockApi },
       dataStore,
       patchStore,
       mockPreferencesProvider,
     );
-    return { mutations, dataStore };
+    return { mutations, dataStore, derived };
   }
 
   it("should set viewer.blocking on the profile", async () => {
@@ -1950,29 +2031,22 @@ describe("blockProfile", () => {
     assert.deepEqual(dataStore.$blockedProfiles.get(), null);
   });
 
-  it("should update author viewer.blocking on cached posts by that author", async () => {
-    const { mutations, dataStore } = setup();
-    const post = {
+  it("should render cached posts by that author as blocked", async () => {
+    const { mutations, dataStore, derived } = setup();
+    const post = createPost({
       uri: "at://did:plc:target/app.bsky.feed.post/1",
-      author: { did: profile.did, viewer: {} },
-    };
-    const otherPost = {
+      authorHandle: profile.handle,
+    });
+    const otherPost = createPost({
       uri: "at://did:plc:someone/app.bsky.feed.post/1",
-      author: { did: "did:plc:someone", viewer: {} },
-    };
-    dataStore.$posts.set(post.uri, post);
-    dataStore.$posts.set(otherPost.uri, otherPost);
+      authorHandle: "someone.test",
+    });
+    dataStore.setPosts([post, otherPost]);
 
     await mutations.blockProfile(profile);
 
-    assert.deepEqual(
-      dataStore.$posts.get(post.uri).author.viewer.blocking,
-      blockUri,
-    );
-    assert.deepEqual(
-      dataStore.$posts.get(otherPost.uri).author.viewer.blocking,
-      undefined,
-    );
+    assert(isBlockedPost(derived.$hydratedPosts.get(post.uri)));
+    assert(!isBlockedPost(derived.$hydratedPosts.get(otherPost.uri)));
   });
 });
 
@@ -1989,13 +2063,14 @@ describe("unblockProfile", () => {
     const mockPreferencesProvider = {
       requirePreferences: () => Preferences.createLoggedOutPreferences(),
     };
+    const derived = makeDerived(dataStore, patchStore, mockPreferencesProvider);
     const mutations = makeMutations(
       { unblockActor: async () => ({}), ...mockApi },
       dataStore,
       patchStore,
       mockPreferencesProvider,
     );
-    return { mutations, dataStore };
+    return { mutations, dataStore, derived };
   }
 
   it("should clear viewer.blocking on the profile", async () => {
@@ -2039,20 +2114,19 @@ describe("unblockProfile", () => {
     assert.deepEqual(dataStore.$blockedProfiles.get().blocks.length, 1);
   });
 
-  it("should clear author viewer.blocking on cached posts by that author", async () => {
-    const { mutations, dataStore } = setup();
-    const post = {
+  it("should stop rendering cached posts by that author as blocked", async () => {
+    const { mutations, dataStore, derived } = setup();
+    const post = createPost({
       uri: "at://did:plc:target/app.bsky.feed.post/1",
-      author: { did: profile.did, viewer: { blocking: "at://old" } },
-    };
-    dataStore.$posts.set(post.uri, post);
+      authorHandle: profile.handle,
+      authorViewer: profile.viewer,
+    });
+    dataStore.setPosts([post]);
+    assert(isBlockedPost(derived.$hydratedPosts.get(post.uri)));
 
     await mutations.unblockProfile(profile);
 
-    assert.deepEqual(
-      dataStore.$posts.get(post.uri).author.viewer.blocking,
-      null,
-    );
+    assert(!isBlockedPost(derived.$hydratedPosts.get(post.uri)));
   });
 });
 

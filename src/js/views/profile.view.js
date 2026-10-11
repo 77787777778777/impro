@@ -343,6 +343,8 @@ export default async function profileView({
               profileInteractionHandler.handleFollow(profile, doFollow),
             onClickMute: (profile, doMute) =>
               profileInteractionHandler.handleMute(profile, doMute),
+            onClickMuteReposts: (profile, doMute) =>
+              profileInteractionHandler.handleMuteReposts(profile, doMute),
             onClickBlock: async (profile, doBlock) => {
               await profileInteractionHandler.handleBlock(profile, doBlock);
               if (!doBlock) {
