@@ -28,7 +28,11 @@ export class PostInteractionHandler {
     }
     const dialog = document.createElement("post-interaction-settings-dialog");
     this._interactionSettingsDialog = dialog;
+    const rootUri = post.record?.reply?.root?.uri ?? post.uri;
     dialog.dataLayer = this.dataLayer;
+    if (rootUri !== post.uri) {
+      dialog.threadRootUri = rootUri;
+    }
     dialog.threadgateAllow = post.threadgate?.record?.allow ?? null;
     dialog.postgateEmbeddingRules = buildPostgateEmbeddingRules(
       !post.viewer?.embeddingDisabled,
@@ -48,7 +52,7 @@ export class PostInteractionHandler {
         if (threadgateDirty) {
           writes.push(
             this.dataLayer.mutations.updateThreadgateAllow(
-              post,
+              { uri: rootUri },
               threadgateAllow,
             ),
           );

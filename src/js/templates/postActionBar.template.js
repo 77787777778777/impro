@@ -76,7 +76,6 @@ function postContextMenuTemplate({
   onClickToggleReplyHiddenForEveryone,
 }) {
   const canPin = isUserPost && !post.record?.reply;
-  const canEditInteractionSettings = isUserPost && !post.record?.reply;
   const canHidePostForMe = !post.viewer?.isHidden;
   const pluginGroups = [...groupBy(pluginItems, "pluginId").values()];
   return html`
@@ -272,17 +271,13 @@ function postContextMenuTemplate({
           ${isUserPost
             ? html`
                 <context-menu-item-group>
-                  ${canEditInteractionSettings
-                    ? html`
-                        <context-menu-item
-                          data-testid="menu-action-interaction-settings"
-                          icon="settings-cog-line"
-                          @click=${() => onClickEditInteractionSettings(post)}
-                        >
-                          Edit interaction settings
-                        </context-menu-item>
-                      `
-                    : null}
+                  <context-menu-item
+                    data-testid="menu-action-interaction-settings"
+                    icon="settings-cog-line"
+                    @click=${() => onClickEditInteractionSettings(post)}
+                  >
+                    Edit interaction settings
+                  </context-menu-item>
                   <context-menu-item
                     data-testid="menu-action-post-delete"
                     icon="delete-bin-line"

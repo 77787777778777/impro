@@ -10901,6 +10901,32 @@ label:has(toggle-switch[disabled]) {
   cursor: not-allowed;
 }
 
+.interaction-settings-section-disabled {
+  opacity: 0.4;
+}
+
+.interaction-settings-section-disabled .interaction-settings-row-disabled {
+  opacity: 1;
+}
+
+.interaction-settings-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--card-border-radius);
+  background: var(--post-hover-color);
+  color: var(--text-color-secondary);
+  font-size: 14px;
+}
+
+.interaction-settings-notice app-icon {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
 .interaction-settings-list-avatar {
   width: 24px;
   height: 24px;
