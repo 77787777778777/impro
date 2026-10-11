@@ -79,6 +79,7 @@ function videoFixture() {
       mimeType: "video/mp4",
       size: 12345,
     },
+    file: { type: "video/mp4" },
     alt: "a clip",
     aspectRatio: { width: 16, height: 9 },
   };
@@ -111,6 +112,23 @@ describe("video embed preparation", () => {
     assert.deepEqual(embed.video.size, 12345);
     assert.deepEqual(embed.aspectRatio.width, 16);
     assert.deepEqual(embed.aspectRatio.height, 9);
+  });
+
+  it("marks GIF uploads with the gif presentation", async () => {
+    const api = makeApi();
+    const pc = new PostCreator(api, mockIdentityResolver);
+    await createSinglePost(pc, {
+      postText: "hi",
+      video: { ...videoFixture(), file: { type: "image/gif" } },
+    });
+    assert.deepEqual(api.lastEmbed.presentation, "gif");
+  });
+
+  it("omits presentation for regular videos", async () => {
+    const api = makeApi();
+    const pc = new PostCreator(api, mockIdentityResolver);
+    await createSinglePost(pc, { postText: "hi", video: videoFixture() });
+    assert(!("presentation" in api.lastEmbed));
   });
 
   it("omits aspectRatio when missing", async () => {

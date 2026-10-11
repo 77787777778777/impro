@@ -1017,6 +1017,12 @@ describe("post-composer", () => {
     });
   }
 
+  function makeGifFile(name = "dance.gif") {
+    return new globalThis.window.File(["gif-bytes"], name, {
+      type: "image/gif",
+    });
+  }
+
   function makePasteEvent(files) {
     let prevented = false;
     return {
@@ -2559,6 +2565,17 @@ describe("post-composer", () => {
       assert.deepEqual(getFirstPost(element).video, null);
     });
 
+    it("rejects a GIF mixed with still images", async () => {
+      const element = createPostComposer();
+      connectElement(element);
+      await element.addMediaFiles(getFirstPost(element).id, [
+        makeImageFile(),
+        makeGifFile(),
+      ]);
+      assert.deepEqual(getFirstPost(element).images.length, 0);
+      assert.deepEqual(getFirstPost(element).video, null);
+    });
+
     it("rejects unsupported file types without adding anything", async () => {
       const element = createPostComposer();
       connectElement(element);
@@ -2604,8 +2621,22 @@ describe("post-composer", () => {
       metadataShouldFail: false,
       revokedUrls: [],
     };
+    const originalImage = globalThis.Image;
     URL.createObjectURL = () => "blob:mock";
     URL.revokeObjectURL = (url) => controls.revokedUrls.push(url);
+    globalThis.Image = class {
+      naturalWidth = 320;
+      naturalHeight = 240;
+      set src(_url) {
+        setTimeout(() => {
+          if (controls.metadataShouldFail) {
+            this.onerror?.();
+          } else {
+            this.onload?.();
+          }
+        }, 0);
+      }
+    };
     document.createElement = function (tagName, ...args) {
       const created = originalCreateElement.call(this, tagName, ...args);
       if (String(tagName).toLowerCase() === "video") {
@@ -2623,6 +2654,7 @@ describe("post-composer", () => {
       URL.createObjectURL = originalCreateObjectURL;
       URL.revokeObjectURL = originalRevokeObjectURL;
       document.createElement = originalCreateElement;
+      globalThis.Image = originalImage;
     };
     return controls;
   }
@@ -2676,7 +2708,12 @@ describe("post-composer", () => {
       const element = createPostComposer();
       connectElement(element);
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "uploading", progress: 0 },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "uploading",
+          progress: 0,
+        },
       });
       await nextFrame();
       let overlay = getVideoOverlay(element);
@@ -2684,7 +2721,12 @@ describe("post-composer", () => {
       assert(overlay.querySelector(".loading-spinner") !== null);
 
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "processing", progress: 0 },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "processing",
+          progress: 0,
+        },
       });
       await nextFrame();
       overlay = getVideoOverlay(element);
@@ -2692,7 +2734,12 @@ describe("post-composer", () => {
       assert(!overlay.textContent.includes("%"));
 
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "processing", progress: 40 },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "processing",
+          progress: 40,
+        },
       });
       await nextFrame();
       overlay = getVideoOverlay(element);
@@ -2704,7 +2751,12 @@ describe("post-composer", () => {
       const element = createPostComposer();
       connectElement(element);
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "error", error: "Too big" },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "error",
+          error: "Too big",
+        },
       });
       await nextFrame();
       let overlay = getVideoOverlay(element);
@@ -2713,7 +2765,12 @@ describe("post-composer", () => {
       assert.deepEqual(overlay.querySelector(".loading-spinner"), null);
 
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "error", error: null },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "error",
+          error: null,
+        },
       });
       await nextFrame();
       overlay = getVideoOverlay(element);
@@ -2721,7 +2778,7 @@ describe("post-composer", () => {
       assert.notDeepEqual(overlay.textContent.trim(), "");
 
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "done" },
+        video: { file: makeVideoFile(), previewUrl: "blob:x", status: "done" },
       });
       await nextFrame();
       assert.deepEqual(getVideoOverlay(element), null);
@@ -2731,7 +2788,12 @@ describe("post-composer", () => {
       const element = createPostComposer();
       connectElement(element);
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "done", alt: "" },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "done",
+          alt: "",
+        },
         videoToken: Symbol("token"),
         draftVideoCaptions: [{ lang: "en" }],
       });
@@ -3070,7 +3132,12 @@ describe("post-composer", () => {
       const element = createPostComposer();
       connectElement(element);
       patchFirstPost(element, {
-        video: { previewUrl: "blob:x", status: "done", alt: "" },
+        video: {
+          file: makeVideoFile(),
+          previewUrl: "blob:x",
+          status: "done",
+          alt: "",
+        },
       });
       await nextFrame();
       element.querySelector(".video-preview-item .alt-indicator").click();
@@ -4289,6 +4356,35 @@ describe("post-composer", () => {
       assert.deepEqual(video.blob, { $type: "blob", ref: "blobref" });
       assert.deepEqual(video.previewUrl, "blob:mock");
       assert.deepEqual(video.error, null);
+    });
+
+    it("uploads a selected GIF as a video with a still-image preview", async () => {
+      const element = createPostComposer();
+      element.dataLayer = makeVideoDataLayer();
+      connectElement(element);
+      await element.addMediaFiles(getFirstPost(element).id, [makeGifFile()]);
+      assert.deepEqual(getFirstPost(element).images.length, 0);
+      await waitFor(() => getFirstPost(element).video?.status === "done");
+      const video = getFirstPost(element).video;
+      assert.deepEqual(video.file.type, "image/gif");
+      assert.deepEqual(video.aspectRatio, { width: 320, height: 240 });
+      await nextFrame();
+      const preview = element.querySelector(".video-preview-item");
+      assert(
+        preview.querySelector('[data-testid="composer-video-gif-preview"]') !==
+          null,
+      );
+      assert.deepEqual(preview.querySelector("video"), null);
+    });
+
+    it("warns and adds nothing when a GIF can't be read", async () => {
+      videoEnv.metadataShouldFail = true;
+      const element = createPostComposer();
+      element.dataLayer = makeVideoDataLayer();
+      connectElement(element);
+      await element.addMediaFiles(getFirstPost(element).id, [makeGifFile()]);
+      assert.deepEqual(getFirstPost(element).video, null);
+      assert.deepEqual(getFirstPost(element).images.length, 0);
     });
 
     describe("with zero-delay timers", () => {

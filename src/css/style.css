@@ -3489,10 +3489,15 @@ streaming-video.is-paused .gif-play-toggle app-icon {
   background: black;
 }
 
-.video-preview-item video {
+.video-preview-item video,
+.video-preview-item img {
   width: 100%;
   display: block;
   max-height: 360px;
+}
+
+.video-preview-item img {
+  object-fit: contain;
 }
 
 .video-preview-item .alt-indicator {

@@ -1,6 +1,7 @@
 import { isNil, wait } from "/js/utils.js";
 import { computeRecordCid, generateTid } from "/js/atproto.js";
 import { ImageCompressor } from "/js/imageCompressor.js";
+import { isGifFile } from "/js/videoUtils.js";
 import {
   fetchAndCompressLinkCardImage,
   LEGACY_IMAGES_EMBED_MAX,
@@ -265,6 +266,9 @@ export class PostCreator {
         size: video.blob.size,
       },
     };
+    if (isGifFile(video.file)) {
+      embed.presentation = "gif";
+    }
     if (video.alt) {
       embed.alt = video.alt;
     }

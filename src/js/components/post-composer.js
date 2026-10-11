@@ -25,6 +25,7 @@ import {
   readVideoMetadata,
   VideoUploader,
   VideoValidationError,
+  isGifFile,
 } from "/js/videoUtils.js";
 import {
   recordEmbedTemplate,
@@ -361,19 +362,33 @@ function altIndicatorContentTemplate(hasAlt) {
 function videoPreviewTemplate({ video, onRemove, onEditAltText }) {
   const isReady = video.status === "done";
   const isError = video.status === "error";
+  const isGif = isGifFile(video.file);
   let progressLabel = "";
   if (video.status === "uploading") {
-    progressLabel = "Uploading...";
+    progressLabel = isGif ? "Uploading GIF..." : "Uploading...";
   } else if (video.status === "processing") {
+    const processingLabel = isGif ? "Processing GIF..." : "Processing...";
     progressLabel =
-      video.progress > 0 ? `Processing... ${video.progress}%` : "Processing...";
+      video.progress > 0
+        ? `${processingLabel} ${video.progress}%`
+        : processingLabel;
   } else if (isError) {
     progressLabel = video.error || "Upload failed";
   }
   return html`
     <div class="post-composer-video-preview">
       <div class="video-preview-item">
-        <video src="${video.previewUrl}" controls playsinline></video>
+        ${isGif
+          ? html`<img
+              src="${video.previewUrl}"
+              alt=""
+              data-testid="composer-video-gif-preview"
+            />`
+          : html`<video
+              src="${video.previewUrl}"
+              controls
+              playsinline
+            ></video>`}
         <button
           class="image-preview-remove-button"
           @click=${(e) => {
@@ -1332,8 +1347,12 @@ class PostComposer extends Component {
   async addMediaFiles(postId, files) {
     if (files.length === 0) return;
 
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    const videoFiles = files.filter((file) => file.type.startsWith("video/"));
+    const videoFiles = files.filter(
+      (file) => file.type.startsWith("video/") || isGifFile(file),
+    );
+    const imageFiles = files.filter(
+      (file) => file.type.startsWith("image/") && !isGifFile(file),
+    );
 
     if (imageFiles.length + videoFiles.length < files.length) {
       showToast("Unsupported file type", { style: "warning" });
