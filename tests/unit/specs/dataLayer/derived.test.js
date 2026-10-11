@@ -2047,7 +2047,13 @@ describe("$hydratedPostThreads", () => {
       uri: threadUri,
       record: { text: "root" },
     });
-    dataStore.$posts.set("reply1", { uri: "reply1", record: { text: "r1" } });
+    dataStore.$posts.set("reply1", {
+      uri: "reply1",
+      record: {
+        text: "r1",
+        reply: { root: { uri: threadUri }, parent: { uri: threadUri } },
+      },
+    });
     dataStore.setPostThread(threadUri, {
       $type: "app.bsky.feed.defs#threadViewPost",
       post: { uri: threadUri },
@@ -2065,6 +2071,160 @@ describe("$hydratedPostThreads", () => {
     assert.deepEqual(result.replies[0].post.uri, "reply1");
     assert.deepEqual(result.replies[0].post.isHidden, true);
     assert.deepEqual(result.replies[1], blockedReply);
+  });
+
+  function seedThreadWithReply(
+    dataStore,
+    { hiddenReplies, serverHidden, serverHiddenByThreadgate = false },
+  ) {
+    dataStore.$posts.set(threadUri, {
+      uri: threadUri,
+      record: { text: "root" },
+      threadgate: { record: { hiddenReplies } },
+    });
+    dataStore.$posts.set("reply1", {
+      uri: "reply1",
+      record: {
+        text: "r1",
+        reply: { root: { uri: threadUri }, parent: { uri: threadUri } },
+      },
+    });
+    dataStore.setPostThread(threadUri, {
+      $type: "app.bsky.feed.defs#threadViewPost",
+      post: { uri: threadUri },
+      replies: [
+        {
+          $type: "app.bsky.feed.defs#threadViewPost",
+          post: { uri: "reply1" },
+        },
+      ],
+    });
+    dataStore.$postThreadOthers.set(
+      threadUri,
+      serverHidden
+        ? [
+            {
+              uri: "reply1",
+              value: { hiddenByThreadgate: serverHiddenByThreadgate },
+            },
+          ]
+        : [],
+    );
+  }
+
+  it("should mark replies in the root threadgate's hiddenReplies as hidden by the threadgate", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, {
+      hiddenReplies: ["reply1"],
+      serverHidden: false,
+    });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, true);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, true);
+  });
+
+  it("should not attribute a server-only hide to the threadgate", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, { hiddenReplies: [], serverHidden: true });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, true);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, false);
+  });
+
+  it("should mark unhidden replies as not hidden by the threadgate", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, { hiddenReplies: [], serverHidden: false });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, false);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, false);
+  });
+
+  it("should hide a reply from a pending threadgate patch before the appview catches up", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived, patchStore } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, { hiddenReplies: [], serverHidden: false });
+    assert.deepEqual(
+      derived.$hydratedPostThreads.get(threadUri).replies[0].post.isHidden,
+      false,
+    );
+    patchStore.addPostPatch(threadUri, {
+      type: "setThreadgateHiddenReply",
+      replyUri: "reply1",
+      hidden: true,
+    });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, true);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, true);
+  });
+
+  it("should show a reply the root threadgate no longer hides despite a stale server verdict", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, {
+      hiddenReplies: [],
+      serverHidden: true,
+      serverHiddenByThreadgate: true,
+    });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, false);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, false);
+  });
+
+  it("should keep a reply hidden for other reasons after its threadgate hide is removed", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived, patchStore } = makeDerived(dataStore);
+    seedThreadWithReply(dataStore, {
+      hiddenReplies: ["reply1"],
+      serverHidden: true,
+    });
+    patchStore.addPostPatch(threadUri, {
+      type: "setThreadgateHiddenReply",
+      replyUri: "reply1",
+      hidden: false,
+    });
+    const reply = derived.$hydratedPostThreads.get(threadUri).replies[0];
+    assert.deepEqual(reply.post.isHidden, true);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, false);
+  });
+
+  it("should fall back to the appview's threadgate verdict when the root post isn't loaded", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore);
+    const rootUri = "missing-root";
+    const anchor = {
+      uri: "anchor",
+      record: {
+        text: "anchor",
+        reply: { root: { uri: rootUri }, parent: { uri: rootUri } },
+      },
+    };
+    dataStore.$posts.set("anchor", anchor);
+    dataStore.$posts.set("reply1", {
+      uri: "reply1",
+      record: {
+        text: "r1",
+        reply: { root: { uri: rootUri }, parent: { uri: "anchor" } },
+      },
+    });
+    dataStore.setPostThread("anchor", {
+      $type: "app.bsky.feed.defs#threadViewPost",
+      post: anchor,
+      replies: [
+        {
+          $type: "app.bsky.feed.defs#threadViewPost",
+          post: { uri: "reply1" },
+        },
+      ],
+    });
+    dataStore.$postThreadOthers.set("anchor", [
+      { uri: "reply1", value: { hiddenByThreadgate: true } },
+    ]);
+    const reply = derived.$hydratedPostThreads.get("anchor").replies[0];
+    assert.deepEqual(reply.post.isHidden, true);
+    assert.deepEqual(reply.post.isHiddenByThreadgate, true);
   });
 
   function seedThreadWithParent(dataStore, parent) {

@@ -153,6 +153,27 @@ export class PatchStore extends ReactiveStore {
           },
         };
       }
+      case "setThreadgateHiddenReply": {
+        const record = {
+          $type: "app.bsky.feed.threadgate",
+          post: post.uri,
+          ...post.threadgate?.record,
+        };
+        const otherUris = (record.hiddenReplies ?? []).filter(
+          (uri) => uri !== patchBody.replyUri,
+        );
+        record.hiddenReplies = patchBody.hidden
+          ? [...otherUris, patchBody.replyUri]
+          : otherUris;
+        return {
+          ...post,
+          threadgate: {
+            lists: [],
+            ...post.threadgate,
+            record,
+          },
+        };
+      }
       default:
         throw new Error("Unknown patch type", patchBody.type);
     }

@@ -323,6 +323,11 @@ export function largePostTemplate({
                     quotedPostUri,
                     doDetach,
                   ),
+                onClickToggleReplyHiddenForEveryone: (post, doHide) =>
+                  postInteractionHandler.handleToggleReplyHiddenForEveryone(
+                    post,
+                    doHide,
+                  ),
                 onClickReport: (post) =>
                   postInteractionHandler.handleReport(post),
                 pluginService,

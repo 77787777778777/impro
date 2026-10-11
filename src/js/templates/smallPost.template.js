@@ -5,6 +5,7 @@ import {
   isUnavailablePost,
   getDisplayName,
   doHideAuthorOnUnauthenticated,
+  isThreadRootAuthor,
 } from "/js/dataHelpers.js";
 import { noop } from "/js/utils.js";
 import { linkToPost, linkToProfile } from "/js/navigation.js";
@@ -120,6 +121,10 @@ export function smallPostTemplate({
     !isAuthenticated &&
     post.author &&
     doHideAuthorOnUnauthenticated(post.author);
+  const isHiddenByYou =
+    !!post.isHiddenByThreadgate &&
+    !!currentUser &&
+    isThreadRootAuthor(post, currentUser.did);
   const postText = post.record.text || "";
   const content = html`
     <container-link
@@ -167,6 +172,14 @@ export function smallPostTemplate({
             did: post.author?.did,
             pluginService,
           })}
+          ${isHiddenByYou
+            ? html`<div
+                class="hidden-reply-label"
+                data-testid="hidden-reply-label"
+              >
+                <app-icon icon="eye-off-line"></app-icon> Reply hidden by you
+              </div>`
+            : ""}
           ${showReplyToLabel
             ? replyToLabelTemplate({
                 currentUser,
@@ -263,6 +276,11 @@ export function smallPostTemplate({
                 post,
                 quotedPostUri,
                 doDetach,
+              ),
+            onClickToggleReplyHiddenForEveryone: (post, doHide) =>
+              postInteractionHandler.handleToggleReplyHiddenForEveryone(
+                post,
+                doHide,
               ),
             onClickReport: (post) => postInteractionHandler.handleReport(post),
             enableFeedFeedback,

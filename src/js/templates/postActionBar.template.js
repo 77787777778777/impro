@@ -9,6 +9,7 @@ import {
   classnames,
   isAndroid,
   isFirefox,
+  isNil,
 } from "/js/utils.js";
 import { fillableIconTemplate } from "/js/templates/fillableIcon.template.js";
 import "/js/components/app-icon.js";
@@ -17,6 +18,7 @@ import {
   canReplyToPost,
   getFeedGeneratorProxyUrl,
   getOwnQuoteEmbed,
+  isThreadRootAuthor,
 } from "/js/dataHelpers.js";
 import { richTextToString } from "/js/facetHelpers.js";
 import { SignInModal } from "/js/modals/signIn.modal.js";
@@ -56,6 +58,7 @@ function postContextMenuTemplate({
   isUserPost,
   isPinnedToProfile,
   ownQuoteEmbed,
+  canHideReplyForEveryone,
   enableFeedFeedback,
   feedContext,
   pluginItems,
@@ -70,6 +73,7 @@ function postContextMenuTemplate({
   onClickPin,
   onClickEditInteractionSettings,
   onClickToggleQuoteDetachment,
+  onClickToggleReplyHiddenForEveryone,
 }) {
   const canPin = isUserPost && !post.record?.reply;
   const canEditInteractionSettings = isUserPost && !post.record?.reply;
@@ -158,7 +162,7 @@ function postContextMenuTemplate({
           </context-menu-item-group>
           ${!isUserPost
             ? html`
-                ${canHidePostForMe || ownQuoteEmbed
+                ${canHidePostForMe || ownQuoteEmbed || canHideReplyForEveryone
                   ? html`
                       <context-menu-item-group>
                         ${canHidePostForMe
@@ -170,6 +174,28 @@ function postContextMenuTemplate({
                               >
                                 Hide ${post.record?.reply ? "reply" : "post"}
                                 for me
+                              </context-menu-item>
+                            `
+                          : null}
+                        ${canHideReplyForEveryone
+                          ? html`
+                              <context-menu-item
+                                data-testid="menu-action-post-toggle-reply-hidden"
+                                data-teststate=${post.isHiddenByThreadgate
+                                  ? "hidden"
+                                  : "shown"}
+                                icon=${post.isHiddenByThreadgate
+                                  ? "eye-line"
+                                  : "eye-off-line"}
+                                @click=${() =>
+                                  onClickToggleReplyHiddenForEveryone(
+                                    post,
+                                    !post.isHiddenByThreadgate,
+                                  )}
+                              >
+                                ${post.isHiddenByThreadgate
+                                  ? "Show reply for everyone"
+                                  : "Hide reply for everyone"}
                               </context-menu-item>
                             `
                           : null}
@@ -436,6 +462,7 @@ export function postActionBarTemplate({
   onClickPin = noop,
   onClickEditInteractionSettings = noop,
   onClickToggleQuoteDetachment = noop,
+  onClickToggleReplyHiddenForEveryone = noop,
   enableFeedFeedback = false,
   pluginService,
 }) {
@@ -452,6 +479,11 @@ export function postActionBarTemplate({
   const ownQuoteEmbed = currentUser
     ? getOwnQuoteEmbed(post, currentUser.did)
     : null;
+  const canHideReplyForEveryone =
+    !isUserPost &&
+    !!currentUser &&
+    !isNil(post.isHiddenByThreadgate) &&
+    isThreadRootAuthor(post, currentUser.did);
   return html`
     <div class="post-actions">
       <div class="post-actions-primary">
@@ -592,6 +624,7 @@ export function postActionBarTemplate({
                 isUserPost,
                 isPinnedToProfile,
                 ownQuoteEmbed,
+                canHideReplyForEveryone,
                 enableFeedFeedback,
                 feedContext,
                 feedGenerator,
@@ -607,6 +640,7 @@ export function postActionBarTemplate({
                 onClickPin,
                 onClickEditInteractionSettings,
                 onClickToggleQuoteDetachment,
+                onClickToggleReplyHiddenForEveryone,
               });
             }}
           >

@@ -335,7 +335,25 @@ export class Derived extends ReactiveStore {
       if (isEmptyPost(postThread)) {
         return postThread;
       }
-      const hiddenReplyUris = new Set(postThreadOther.map((item) => item.uri));
+      const rootPost = this.$hydratedPosts.get(
+        getReplyRootFromPost(postThread.post).uri,
+      );
+      const isOtherHiddenByThreadgate = (item) =>
+        !!item.value?.hiddenByThreadgate;
+      const hiddenReplyUris = {
+        server: new Set(
+          postThreadOther
+            .filter((item) => !isOtherHiddenByThreadgate(item))
+            .map((item) => item.uri),
+        ),
+        threadgate: new Set(
+          rootPost
+            ? (rootPost.threadgate?.record?.hiddenReplies ?? [])
+            : postThreadOther
+                .filter(isOtherHiddenByThreadgate)
+                .map((item) => item.uri),
+        ),
+      };
       const hydrated = this.hydratePostThreadNode(postThread, hiddenReplyUris);
       if (!hydrated) {
         return null;
@@ -1124,9 +1142,17 @@ export class Derived extends ReactiveStore {
       post,
       postNumbering: this.dataStore.$postNumbering.get(node.post.uri) ?? null,
     };
-    if (hiddenReplyUris.has(node.post.uri)) {
+    if (post.record?.reply) {
+      const isHiddenByThreadgate = hiddenReplyUris.threadgate.has(
+        node.post.uri,
+      );
       // NOTE: LEXICON DEVIATION
-      hydrated.post = { ...post, isHidden: true };
+      hydrated.post = {
+        ...post,
+        isHidden:
+          isHiddenByThreadgate || hiddenReplyUris.server.has(node.post.uri),
+        isHiddenByThreadgate,
+      };
     }
     if (node.replies) {
       hydrated.replies = node.replies.map((reply) => {

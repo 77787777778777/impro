@@ -1,6 +1,10 @@
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { Mutations, DetachedQuoteLimitError } from "/js/dataLayer/mutations.js";
+import {
+  Mutations,
+  DetachedQuoteLimitError,
+  HiddenReplyLimitError,
+} from "/js/dataLayer/mutations.js";
 import { DataStore } from "/js/dataLayer/dataStore.js";
 import { createSessionState } from "/js/dataLayer/sessionState.js";
 import { DraftMediaStore } from "/js/drafts.js";
@@ -12,7 +16,7 @@ import { HiddenFeedItemsStore } from "/js/dataLayer/hiddenFeedItemsStore.js";
 import { CDN_URL } from "/js/config.js";
 import { ApiError } from "/js/api.js";
 import { trackDisposable } from "../../testHelpers.js";
-import { isBlockedPost } from "/js/dataHelpers.js";
+import { isBlockedPost, MAX_HIDDEN_REPLIES } from "/js/dataHelpers.js";
 import { createPost } from "../../../shared/factories.js";
 
 function escapeRegExp(value) {
@@ -6652,5 +6656,235 @@ describe("setThreadMuted", () => {
     await assert.rejects(mutations.setThreadMuted(reply, true), error);
     assert.equal(storedThreadMuted(dataStore, reply.uri), undefined);
     assert.deepEqual(patchStore.$threadMutePatches.get(rootUri), []);
+  });
+});
+
+describe("updateThreadgateHiddenReply", () => {
+  const userDid = "did:plc:me";
+  const rootUri = `at://${userDid}/app.bsky.feed.post/root`;
+  const replyUri = "at://did:plc:other/app.bsky.feed.post/reply";
+  const rootPost = {
+    uri: rootUri,
+    cid: "cid-root",
+    author: { did: userDid, viewer: {} },
+    record: { text: "root" },
+  };
+  const reply = {
+    uri: replyUri,
+    cid: "cid-reply",
+    author: { did: "did:plc:other", viewer: {} },
+    record: {
+      text: "reply",
+      reply: {
+        root: { uri: rootUri, cid: "cid-root" },
+        parent: { uri: rootUri, cid: "cid-root" },
+      },
+    },
+  };
+  const allow = [{ $type: "app.bsky.feed.threadgate#mentionRule" }];
+
+  function recordNotFoundError() {
+    return new ApiError({
+      status: 400,
+      statusText: "Bad Request",
+      data: { error: "RecordNotFound" },
+      headers: {},
+      url: "",
+    });
+  }
+
+  function priorRecord(value) {
+    return {
+      cid: "cid-prior",
+      value: {
+        $type: "app.bsky.feed.threadgate",
+        post: rootUri,
+        createdAt: "2024-01-01T00:00:00.000Z",
+        ...value,
+      },
+    };
+  }
+
+  function setup(mockApi) {
+    const dataStore = new DataStore(createSessionState(null));
+    dataStore.$currentUser.set({ did: userDid, handle: "me.test" });
+    dataStore.$posts.set(rootUri, rootPost);
+    const patchStore = new PatchStore();
+    const mutations = makeMutations(mockApi, dataStore, patchStore, {
+      requirePreferences: () => Preferences.createLoggedOutPreferences(),
+    });
+    return { mutations, dataStore, patchStore };
+  }
+
+  it("appends the reply to hiddenReplies, preserving allow and swapping on the prior cid", async () => {
+    let putArgs = null;
+    const otherHidden = "at://did:plc:x/app.bsky.feed.post/old";
+    const { mutations, dataStore } = setup({
+      getThreadgateRecord: async () =>
+        priorRecord({ allow, hiddenReplies: [otherHidden] }),
+      putThreadgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-next" };
+      },
+    });
+
+    await mutations.updateThreadgateHiddenReply(reply, true);
+
+    assert.deepEqual(putArgs.rkey, "root");
+    assert.deepEqual(putArgs.swapRecord, "cid-prior");
+    assert.deepEqual(putArgs.record.allow, allow);
+    assert.deepEqual(putArgs.record.hiddenReplies, [otherHidden, replyUri]);
+    const updatedRoot = dataStore.$posts.get(rootUri);
+    assert.deepEqual(updatedRoot.threadgate.cid, "cid-next");
+    assert.deepEqual(updatedRoot.threadgate.record.hiddenReplies, [
+      otherHidden,
+      replyUri,
+    ]);
+  });
+
+  it("creates a threadgate without allow when none exists", async () => {
+    let putArgs = null;
+    const { mutations } = setup({
+      getThreadgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putThreadgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-new" };
+      },
+    });
+
+    await mutations.updateThreadgateHiddenReply(reply, true);
+
+    assert.deepEqual(putArgs.swapRecord, null);
+    assert.deepEqual("allow" in putArgs.record, false);
+    assert.deepEqual(putArgs.record.post, rootUri);
+    assert.deepEqual(putArgs.record.hiddenReplies, [replyUri]);
+  });
+
+  it("removes the reply from hiddenReplies when showing", async () => {
+    let putArgs = null;
+    const { mutations } = setup({
+      getThreadgateRecord: async () =>
+        priorRecord({ allow, hiddenReplies: [replyUri] }),
+      putThreadgateRecord: async (rkey, record, swapRecord) => {
+        putArgs = { rkey, record, swapRecord };
+        return { cid: "cid-next" };
+      },
+    });
+
+    await mutations.updateThreadgateHiddenReply(reply, false);
+
+    assert.deepEqual(putArgs.record.hiddenReplies, []);
+    assert.deepEqual(putArgs.record.allow, allow);
+  });
+
+  it("doesn't write when showing and no threadgate exists", async () => {
+    const putThreadgateRecord = mock.fn();
+    const { mutations } = setup({
+      getThreadgateRecord: async () => {
+        throw recordNotFoundError();
+      },
+      putThreadgateRecord,
+    });
+
+    await mutations.updateThreadgateHiddenReply(reply, false);
+
+    assert.deepEqual(putThreadgateRecord.mock.callCount(), 0);
+  });
+
+  it("throws HiddenReplyLimitError at the cap", async () => {
+    const putThreadgateRecord = mock.fn();
+    const hiddenReplies = Array.from(
+      { length: MAX_HIDDEN_REPLIES },
+      (_, i) => `at://did:plc:x/app.bsky.feed.post/${i}`,
+    );
+    const { mutations } = setup({
+      getThreadgateRecord: async () => priorRecord({ hiddenReplies }),
+      putThreadgateRecord,
+    });
+
+    await assert.rejects(
+      () => mutations.updateThreadgateHiddenReply(reply, true),
+      HiddenReplyLimitError,
+    );
+    assert.deepEqual(putThreadgateRecord.mock.callCount(), 0);
+  });
+
+  function deferredGet() {
+    let resolveGet;
+    const getThreadgateRecord = () =>
+      new Promise((resolve) => {
+        resolveGet = resolve;
+      });
+    return { getThreadgateRecord, resolve: (value) => resolveGet(value) };
+  }
+
+  it("patches the root's hiddenReplies while in flight and removes the patch after", async () => {
+    const get = deferredGet();
+    const { mutations, dataStore, patchStore } = setup({
+      getThreadgateRecord: get.getThreadgateRecord,
+      putThreadgateRecord: async () => ({ cid: "cid-next" }),
+    });
+
+    const promise = mutations.updateThreadgateHiddenReply(reply, true);
+    assert.deepEqual(
+      applyPostPatches(patchStore, rootPost).threadgate.record.hiddenReplies,
+      [replyUri],
+    );
+    get.resolve(priorRecord({ allow }));
+    await promise;
+    assert.deepEqual(patchStore.$postPatches.get(rootUri) ?? [], []);
+    assert.deepEqual(
+      dataStore.$posts.get(rootUri).threadgate.record.hiddenReplies,
+      [replyUri],
+    );
+  });
+
+  it("patches the reply shown optimistically and removes the patch on failure", async () => {
+    const get = deferredGet();
+    const { mutations, dataStore, patchStore } = setup({
+      getThreadgateRecord: get.getThreadgateRecord,
+      putThreadgateRecord: async () => {
+        throw new Error("conflict");
+      },
+    });
+    const hiddenRootPost = {
+      ...rootPost,
+      threadgate: { record: { hiddenReplies: [replyUri] } },
+    };
+    dataStore.$posts.set(rootUri, hiddenRootPost);
+
+    const promise = mutations.updateThreadgateHiddenReply(reply, false);
+    assert.deepEqual(
+      applyPostPatches(patchStore, hiddenRootPost).threadgate.record
+        .hiddenReplies,
+      [],
+    );
+    get.resolve(priorRecord({ hiddenReplies: [replyUri] }));
+    await assert.rejects(promise, /conflict/);
+    assert.deepEqual(patchStore.$postPatches.get(rootUri) ?? [], []);
+    assert.deepEqual(
+      dataStore.$posts.get(rootUri).threadgate.record.hiddenReplies,
+      [replyUri],
+    );
+  });
+
+  it("rejects when the viewer doesn't own the thread root", async () => {
+    const { mutations } = setup({});
+    const foreignReply = {
+      ...reply,
+      record: {
+        ...reply.record,
+        reply: {
+          root: { uri: "at://did:plc:else/app.bsky.feed.post/r", cid: "c" },
+          parent: { uri: "at://did:plc:else/app.bsky.feed.post/r", cid: "c" },
+        },
+      },
+    };
+    await assert.rejects(
+      () => mutations.updateThreadgateHiddenReply(foreignReply, true),
+      /thread author/,
+    );
   });
 });

@@ -1114,6 +1114,13 @@ export function buildPostgateEmbeddingRules(quotesEnabled) {
 
 export const MAX_DETACHED_EMBEDDING_URIS = 50;
 
+export const MAX_HIDDEN_REPLIES = 300;
+
+export function isThreadRootAuthor(post, did) {
+  const rootUri = post.record?.reply?.root?.uri;
+  return !!rootUri && parseUri(rootUri).repo === did;
+}
+
 export function createDetachedQuote(uri) {
   return { $type: "app.bsky.embed.record#viewDetached", uri, detached: true };
 }

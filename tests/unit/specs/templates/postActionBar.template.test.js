@@ -527,6 +527,104 @@ describe("postActionBarTemplate - plugin context menu items", () => {
     ]);
   });
 
+  function replyToThreadOf(rootDid, overrides = {}) {
+    const rootUri = `at://${rootDid}/app.bsky.feed.post/root`;
+    return {
+      ...post,
+      record: {
+        ...post.record,
+        reply: {
+          root: { uri: rootUri, cid: "cid-root" },
+          parent: { uri: rootUri, cid: "cid-root" },
+        },
+      },
+      isHiddenByThreadgate: false,
+      ...overrides,
+    };
+  }
+
+  it("should offer hiding a reply for everyone in the viewer's own thread", async () => {
+    const onClickToggleReplyHiddenForEveryone = mock.fn();
+    const reply = replyToThreadOf("did:plc:test");
+    const menu = await renderAndOpenMenu({
+      post: reply,
+      isAuthenticated: true,
+      onClickToggleReplyHiddenForEveryone,
+    });
+    const item = menu.querySelector(
+      '[data-testid="menu-action-post-toggle-reply-hidden"]',
+    );
+    assert.equal(item.dataset.teststate, "shown");
+    item.click();
+    assert.deepEqual(
+      onClickToggleReplyHiddenForEveryone.mock.calls[0].arguments,
+      [reply, true],
+    );
+  });
+
+  it("should offer showing a reply hidden by the threadgate", async () => {
+    const onClickToggleReplyHiddenForEveryone = mock.fn();
+    const reply = replyToThreadOf("did:plc:test", {
+      isHiddenByThreadgate: true,
+    });
+    const menu = await renderAndOpenMenu({
+      post: reply,
+      isAuthenticated: true,
+      onClickToggleReplyHiddenForEveryone,
+    });
+    const item = menu.querySelector(
+      '[data-testid="menu-action-post-toggle-reply-hidden"]',
+    );
+    assert.equal(item.dataset.teststate, "hidden");
+    item.click();
+    assert.deepEqual(
+      onClickToggleReplyHiddenForEveryone.mock.calls[0].arguments,
+      [reply, false],
+    );
+  });
+
+  it("should not offer hiding a reply for everyone in someone else's thread", async () => {
+    const menu = await renderAndOpenMenu({
+      post: replyToThreadOf("did:plc:someone-else"),
+      isAuthenticated: true,
+    });
+    assert.equal(
+      menu.querySelector(
+        '[data-testid="menu-action-post-toggle-reply-hidden"]',
+      ),
+      null,
+    );
+  });
+
+  it("should not offer hiding a reply for everyone outside a thread", async () => {
+    const menu = await renderAndOpenMenu({
+      post: replyToThreadOf("did:plc:test", {
+        isHiddenByThreadgate: undefined,
+      }),
+      isAuthenticated: true,
+    });
+    assert.equal(
+      menu.querySelector(
+        '[data-testid="menu-action-post-toggle-reply-hidden"]',
+      ),
+      null,
+    );
+  });
+
+  it("should not offer hiding the viewer's own reply for everyone", async () => {
+    const menu = await renderAndOpenMenu({
+      post: replyToThreadOf("did:plc:test"),
+      isAuthenticated: true,
+      isUserPost: true,
+    });
+    assert.equal(
+      menu.querySelector(
+        '[data-testid="menu-action-post-toggle-reply-hidden"]',
+      ),
+      null,
+    );
+  });
+
   it("should pass null feed meta when the post is not in a feed", async () => {
     const menuCalls = [];
     const pluginService = {

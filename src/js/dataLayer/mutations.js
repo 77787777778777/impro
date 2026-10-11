@@ -21,6 +21,7 @@ import {
   createDetachedQuote,
   createEmbedFromPost,
   replaceQuotedPost,
+  MAX_HIDDEN_REPLIES,
 } from "/js/dataHelpers.js";
 import {
   addPostLanguagesToHistory,
@@ -42,6 +43,13 @@ export class DetachedQuoteLimitError extends Error {
       `Posts can have at most ${MAX_DETACHED_EMBEDDING_URIS} detached quotes`,
     );
     this.name = "DetachedQuoteLimitError";
+  }
+}
+
+export class HiddenReplyLimitError extends Error {
+  constructor() {
+    super(`Threads can have at most ${MAX_HIDDEN_REPLIES} hidden replies`);
+    this.name = "HiddenReplyLimitError";
   }
 }
 
@@ -2028,6 +2036,72 @@ export class Mutations {
         this.dataStore.$embeddedPosts.get(postUri),
     );
     return post ? createEmbedFromPost(post) : null;
+  }
+
+  async updateThreadgateHiddenReply(reply, hide) {
+    const currentUser = this.dataStore.$currentUser.get();
+    if (!currentUser) throw new Error("No current user");
+    const rootUri = reply.record?.reply?.root?.uri;
+    if (!rootUri) throw new Error("Post is not a reply");
+    const { repo, rkey } = parseUri(rootUri);
+    if (currentUser.did !== repo) {
+      throw new Error("Only the thread author can hide replies");
+    }
+    if (reply.author?.did === currentUser.did) {
+      throw new Error("Can't hide your own reply");
+    }
+
+    const patchId = this.patchStore.addPostPatch(rootUri, {
+      type: "setThreadgateHiddenReply",
+      replyUri: reply.uri,
+      hidden: hide,
+    });
+    try {
+      let priorThreadgateRecord = null;
+      try {
+        priorThreadgateRecord = await this.api.getThreadgateRecord(rkey);
+      } catch (error) {
+        if (!isRecordNotFoundError(error)) throw error;
+      }
+      if (!priorThreadgateRecord && !hide) return;
+      const priorUris = priorThreadgateRecord?.value?.hiddenReplies ?? [];
+      const otherUris = priorUris.filter((uri) => uri !== reply.uri);
+      if (hide && otherUris.length >= MAX_HIDDEN_REPLIES) {
+        throw new HiddenReplyLimitError();
+      }
+      const record = {
+        ...priorThreadgateRecord?.value,
+        $type: "app.bsky.feed.threadgate",
+        post: rootUri,
+        createdAt: getCurrentTimestamp(),
+        hiddenReplies: hide ? [...otherUris, reply.uri] : otherUris,
+      };
+      const result = await this.api.putThreadgateRecord(
+        rkey,
+        record,
+        priorThreadgateRecord?.cid ?? null,
+      );
+
+      const latestRootPost = this.dataStore.$posts.get(rootUri);
+      if (latestRootPost) {
+        this.dataStore.$posts.set(rootUri, {
+          ...latestRootPost,
+          threadgate: {
+            uri: buildUri({
+              repo,
+              collection: "app.bsky.feed.threadgate",
+              rkey,
+            }),
+            lists: [],
+            ...latestRootPost.threadgate,
+            cid: result.cid,
+            record,
+          },
+        });
+      }
+    } finally {
+      this.patchStore.removePostPatch(rootUri, patchId);
+    }
   }
 
   async updateThreadgateAllow(post, threadgateAllow) {

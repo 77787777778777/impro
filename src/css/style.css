@@ -2312,6 +2312,20 @@ container-link {
   width: 13px;
 }
 
+.small-post .hidden-reply-label {
+  font-size: 14px;
+  margin-top: 4px;
+  color: var(--text-color-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hidden-reply-label app-icon {
+  height: 15px;
+  width: 15px;
+}
+
 .small-post .repost-label {
   font-size: 14px;
   margin-bottom: 5px;
