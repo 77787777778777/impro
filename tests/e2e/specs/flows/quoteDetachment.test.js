@@ -76,7 +76,7 @@ test.describe("Quote detachment flow", () => {
     ).toBeVisible();
     await expect(quotingPost.locator(".quoted-post-link")).toHaveCount(0);
 
-    expect(mockServer.putPostgateCalls.length).toBe(1);
+    await expect.poll(() => mockServer.putPostgateCalls.length).toBe(1);
     const body = mockServer.putPostgateCalls[0];
     expect(body.rkey).toBe("own1");
     expect(body.swapRecord).toBe("bafypriorpostgate");
@@ -129,7 +129,7 @@ test.describe("Quote detachment flow", () => {
       quotingPost.locator('[data-testid="removed-quote"]'),
     ).toHaveCount(0);
 
-    expect(mockServer.putPostgateCalls.length).toBe(1);
+    await expect.poll(() => mockServer.putPostgateCalls.length).toBe(1);
     expect(mockServer.putPostgateCalls[0].record.detachedEmbeddingUris).toEqual(
       [],
     );

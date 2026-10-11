@@ -1873,6 +1873,10 @@ test.describe("Post thread view", () => {
         text: "Normal reply",
         authorHandle: "replier1.bsky.social",
         authorDisplayName: "Replier One",
+        reply: {
+          root: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+          parent: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+        },
       });
 
       const hiddenReply = createPost({
@@ -1880,6 +1884,10 @@ test.describe("Post thread view", () => {
         text: "Sentiment-hidden reply content",
         authorHandle: "replier2.bsky.social",
         authorDisplayName: "Replier Two",
+        reply: {
+          root: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+          parent: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+        },
       });
 
       const mockServer = new MockServer();
@@ -2000,6 +2008,10 @@ test.describe("Post thread view", () => {
         text: "Normal reply",
         authorHandle: "replier1.bsky.social",
         authorDisplayName: "Replier One",
+        reply: {
+          root: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+          parent: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+        },
       });
 
       const hiddenReply = createPost({
@@ -2007,6 +2019,10 @@ test.describe("Post thread view", () => {
         text: "Sentiment-hidden reply revealed",
         authorHandle: "replier2.bsky.social",
         authorDisplayName: "Replier Two",
+        reply: {
+          root: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+          parent: { uri: postWithReplies.uri, cid: postWithReplies.cid },
+        },
       });
 
       const mockServer = new MockServer();
