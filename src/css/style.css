@@ -7076,6 +7076,15 @@ sidebar-search {
   top: -2px;
 }
 
+#feed-detail-view .feed-detail-avatar-skeleton {
+  display: inline-block;
+}
+
+#feed-detail-view .feed-detail-header-skeleton-line {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 #feed-detail-view .pin-feed-button,
 #list-detail-view .pin-feed-button {
   width: 24px;

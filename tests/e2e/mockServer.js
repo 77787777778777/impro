@@ -124,6 +124,7 @@ export class MockServer {
     this.threadViewPref = null;
     this.getProfilesDelayMs = 0;
     this.getStarterPackDelayMs = 0;
+    this.getFeedGeneratorDelayMs = 0;
     this.putPreferencesDelayMs = 0;
     this.getPreferencesDelayMs = 0;
     // Override the source served for the local test plugin's main.js; defaults
@@ -460,6 +461,10 @@ export class MockServer {
 
   setGetStarterPackDelay(delayMs) {
     this.getStarterPackDelayMs = delayMs;
+  }
+
+  setGetFeedGeneratorDelay(delayMs) {
+    this.getFeedGeneratorDelayMs = delayMs;
   }
 
   setNotificationsSeenAt(seenAt) {
@@ -2346,16 +2351,24 @@ export class MockServer {
       });
     });
 
-    await page.route("**/xrpc/app.bsky.feed.getFeedGenerator*", (route) => {
-      const url = new URL(route.request().url());
-      const feedUri = url.searchParams.get("feed");
-      const generator = this.feedGenerators.find((g) => g.uri === feedUri);
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ view: generator || {} }),
-      });
-    });
+    await page.route(
+      "**/xrpc/app.bsky.feed.getFeedGenerator*",
+      async (route) => {
+        if (this.getFeedGeneratorDelayMs > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, this.getFeedGeneratorDelayMs),
+          );
+        }
+        const url = new URL(route.request().url());
+        const feedUri = url.searchParams.get("feed");
+        const generator = this.feedGenerators.find((g) => g.uri === feedUri);
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ view: generator || {} }),
+        });
+      },
+    );
 
     await page.route("**/xrpc/app.bsky.feed.getFeedGenerators*", (route) => {
       const url = new URL(route.request().url());
