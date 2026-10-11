@@ -351,7 +351,7 @@ export default async function settingsView({
                   await pushNotificationService.disable();
                 }
                 await auth.logout();
-                window.location.reload();
+                window.location.href = "/login";
               }}
             >
               Sign out

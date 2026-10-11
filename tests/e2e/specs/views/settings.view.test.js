@@ -92,6 +92,26 @@ test.describe("Settings view", () => {
     );
   });
 
+  test("Signing out goes to the login page without a returnTo", async ({
+    page,
+  }) => {
+    const mockServer = new MockServer();
+    await mockServer.setup(page);
+
+    await loginWithAccounts(page, [
+      { did: userProfile.did, handle: userProfile.handle },
+    ]);
+    await page.goto("/settings");
+
+    const view = page.locator("#settings-view");
+    await view.locator('[data-testid="settings-sign-out"]').click({
+      timeout: 10000,
+    });
+    await page.locator('[data-testid="modal-confirm-button"]').click();
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 10000 });
+  });
+
   test("should display version info", async ({ page }) => {
     const mockServer = new MockServer();
     await mockServer.setup(page);
