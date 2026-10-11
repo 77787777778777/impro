@@ -2817,6 +2817,18 @@ describe("$isFollowPending / $isBlockPending / $isMutePending", () => {
     assert.deepEqual(derived.$isMutePending.get(did), true);
   });
 
+  it("$isMutePending covers reposts-only mute patches", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived, patchStore } = makeDerived(dataStore);
+    const muteId = patchStore.addProfilePatch(did, {
+      type: "muteProfileReposts",
+    });
+    assert.deepEqual(derived.$isMutePending.get(did), true);
+    patchStore.removeProfilePatch(did, muteId);
+    patchStore.addProfilePatch(did, { type: "unmuteProfileReposts" });
+    assert.deepEqual(derived.$isMutePending.get(did), true);
+  });
+
   it("pending signals are keyed per profile", () => {
     const dataStore = new DataStore(createSessionState(null));
     const { derived, patchStore } = makeDerived(dataStore);

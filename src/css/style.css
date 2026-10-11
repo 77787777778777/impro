@@ -6137,6 +6137,17 @@ emoji-picker-dialog emoji-picker,
   flex: none;
 }
 
+.profile-reposts-hidden {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.profile-reposts-hidden app-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .profile-blocked-badge {
   font-size: 13px;
   background: var(--secondary-button-color);

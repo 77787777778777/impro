@@ -216,6 +216,7 @@ export class PatchStore extends ReactiveStore {
           viewer: {
             ...profile.viewer,
             muted: true,
+            mutedOnlyReposts: false,
           },
         };
       case "unmuteProfile":
@@ -224,6 +225,23 @@ export class PatchStore extends ReactiveStore {
           viewer: {
             ...profile.viewer,
             muted: false,
+            mutedOnlyReposts: false,
+          },
+        };
+      case "muteProfileReposts":
+        return {
+          ...profile,
+          viewer: {
+            ...profile.viewer,
+            mutedOnlyReposts: true,
+          },
+        };
+      case "unmuteProfileReposts":
+        return {
+          ...profile,
+          viewer: {
+            ...profile.viewer,
+            mutedOnlyReposts: false,
           },
         };
       case "blockProfile":

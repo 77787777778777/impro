@@ -1830,7 +1830,11 @@ export class MockServer {
       const actor = body?.actor;
       const profile = this.profiles.get(actor);
       if (profile) {
-        profile.viewer = { ...profile.viewer, muted: true };
+        profile.viewer = {
+          ...profile.viewer,
+          muted: !body.onlyReposts,
+          mutedOnlyReposts: !!body.onlyReposts,
+        };
       }
       return route.fulfill({
         status: 200,
@@ -1844,7 +1848,11 @@ export class MockServer {
       const actor = body?.actor;
       const profile = this.profiles.get(actor);
       if (profile) {
-        profile.viewer = { ...profile.viewer, muted: false };
+        profile.viewer = {
+          ...profile.viewer,
+          muted: false,
+          mutedOnlyReposts: false,
+        };
       }
       return route.fulfill({
         status: 200,

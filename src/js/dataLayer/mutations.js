@@ -775,17 +775,8 @@ export class Mutations {
       await this.api.muteActor(profile.did);
       this._updateStoredProfile(profile, (stored) => ({
         ...stored,
-        viewer: { ...stored.viewer, muted: true },
+        viewer: { ...stored.viewer, muted: true, mutedOnlyReposts: false },
       }));
-      this._updatePostsByAuthor(profile.did, (post) => {
-        return {
-          ...post,
-          author: {
-            ...post.author,
-            viewer: { ...post.author.viewer, muted: true },
-          },
-        };
-      });
       const mutedProfiles = this.dataStore.$mutedProfiles.get();
       if (mutedProfiles) {
         const alreadyListed = mutedProfiles.mutes.some(
@@ -814,17 +805,8 @@ export class Mutations {
       await this.api.unmuteActor(profile.did);
       this._updateStoredProfile(profile, (stored) => ({
         ...stored,
-        viewer: { ...stored.viewer, muted: false },
+        viewer: { ...stored.viewer, muted: false, mutedOnlyReposts: false },
       }));
-      this._updatePostsByAuthor(profile.did, (post) => {
-        return {
-          ...post,
-          author: {
-            ...post.author,
-            viewer: { ...post.author.viewer, muted: false },
-          },
-        };
-      });
       const mutedProfiles = this.dataStore.$mutedProfiles.get();
       if (mutedProfiles) {
         this.dataStore.$mutedProfiles.set({
@@ -834,6 +816,42 @@ export class Mutations {
           ),
         });
       }
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      this.patchStore.removeProfilePatch(profile.did, patchId);
+    }
+  }
+
+  async muteProfileReposts(profile) {
+    const patchId = this.patchStore.addProfilePatch(profile.did, {
+      type: "muteProfileReposts",
+    });
+    try {
+      await this.api.muteActorReposts(profile.did);
+      this._updateStoredProfile(profile, (stored) => ({
+        ...stored,
+        viewer: { ...stored.viewer, mutedOnlyReposts: true },
+      }));
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      this.patchStore.removeProfilePatch(profile.did, patchId);
+    }
+  }
+
+  async unmuteProfileReposts(profile) {
+    const patchId = this.patchStore.addProfilePatch(profile.did, {
+      type: "unmuteProfileReposts",
+    });
+    try {
+      await this.api.unmuteActor(profile.did);
+      this._updateStoredProfile(profile, (stored) => ({
+        ...stored,
+        viewer: { ...stored.viewer, mutedOnlyReposts: false },
+      }));
     } catch (error) {
       console.error(error);
       throw error;
@@ -852,15 +870,6 @@ export class Mutations {
         ...stored,
         viewer: { ...stored.viewer, blocking: block.uri },
       }));
-      this._updatePostsByAuthor(profile.did, (post) => {
-        return {
-          ...post,
-          author: {
-            ...post.author,
-            viewer: { ...post.author.viewer, blocking: block.uri },
-          },
-        };
-      });
       const blockedProfiles = this.dataStore.$blockedProfiles.get();
       if (blockedProfiles) {
         const alreadyListed = blockedProfiles.blocks.some(
@@ -910,15 +919,6 @@ export class Mutations {
         ...stored,
         viewer: { ...stored.viewer, blocking: null },
       }));
-      this._updatePostsByAuthor(profile.did, (post) => {
-        return {
-          ...post,
-          author: {
-            ...post.author,
-            viewer: { ...post.author.viewer, blocking: null },
-          },
-        };
-      });
       const blockedProfiles = this.dataStore.$blockedProfiles.get();
       if (blockedProfiles) {
         this.dataStore.$blockedProfiles.set({
@@ -2355,14 +2355,6 @@ export class Mutations {
         ...data,
         drafts: data.drafts.filter((draftView) => draftView.id !== draftId),
       });
-    }
-  }
-
-  _updatePostsByAuthor(profileDid, updateFunc) {
-    for (const post of this.dataStore.$posts.values()) {
-      if (post?.author?.did === profileDid) {
-        this.dataStore.$posts.set(post.uri, updateFunc(post));
-      }
     }
   }
 

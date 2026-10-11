@@ -167,6 +167,8 @@ export class Derived extends ReactiveStore {
       this.patchStore.hasPendingProfilePatch(did, [
         "muteProfile",
         "unmuteProfile",
+        "muteProfileReposts",
+        "unmuteProfileReposts",
       ]),
     );
     this.$patchedPosts = new ComputedMap((uri) => {
