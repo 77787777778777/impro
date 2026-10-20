@@ -914,6 +914,18 @@ export class Derived extends ReactiveStore {
     return { ...item, embed: updated };
   }
 
+  hydrateQuotedAuthors(post) {
+    return transformNestedQuotes(post, (quotedPost) => {
+      if (quotedPost.$type !== "app.bsky.embed.record#viewRecord") {
+        return quotedPost;
+      }
+      const did = quotedPost.author?.did;
+      const storedAuthor = did ? this.$hydratedProfiles.get(did) : null;
+      if (!storedAuthor) return quotedPost;
+      return { ...quotedPost, author: storedAuthor };
+    });
+  }
+
   applyReferenceListOptOut(list) {
     if (!list) return list;
     if (!this.dataStore.$referenceListOptOuts.has(list.uri)) return list;
@@ -972,6 +984,7 @@ export class Derived extends ReactiveStore {
     }
     let result = this.resolveBlockedQuote(post);
     result = this.attachJoinLinkPreview(result);
+    result = this.hydrateQuotedAuthors(result);
     result = applyMutedWords(result, preferences);
     result = applyIsHidden(result, preferences);
     if (result.viewer) {

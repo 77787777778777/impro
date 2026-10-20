@@ -1550,6 +1550,73 @@ describe("$hydratedPosts (nested quotes and author labels)", () => {
     assert.deepEqual(result.author.blurLabel, "adult");
   });
 
+  it("should replace a quoted post's author with the stored profile", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: fakePreferences(),
+    });
+    dataStore.setProfiles([
+      createProfile({
+        did: "did:quoted",
+        handle: "quoted.bsky.social",
+        displayName: "Stored Name",
+      }),
+    ]);
+    dataStore.$posts.set(postURI, makeQuotePost());
+    const result = derived.$hydratedPosts.get(postURI);
+    assert.deepEqual(result.embed.record.author.displayName, "Stored Name");
+  });
+
+  it("should apply profile patches to a quoted post's author", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived, patchStore } = makeDerived(dataStore, {
+      preferences: fakePreferences(),
+    });
+    dataStore.setProfiles([
+      createProfile({ did: "did:quoted", handle: "quoted.bsky.social" }),
+    ]);
+    dataStore.$posts.set(postURI, makeQuotePost());
+    patchStore.addProfilePatch("did:quoted", { type: "muteProfile" });
+    const result = derived.$hydratedPosts.get(postURI);
+    assert.deepEqual(result.embed.record.author.viewer.muted, true);
+  });
+
+  it("should keep the embed author when no stored profile exists", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: fakePreferences(),
+    });
+    dataStore.$posts.set(postURI, makeQuotePost());
+    const result = derived.$hydratedPosts.get(postURI);
+    assert.deepEqual(result.embed.record.author, { did: "did:quoted" });
+  });
+
+  it("should not replace the author of a blocked quote", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: fakePreferences(),
+    });
+    dataStore.setProfiles([
+      createProfile({ did: "did:blocked", handle: "blocked.bsky.social" }),
+    ]);
+    const blockedAuthor = { did: "did:blocked", viewer: { blockedBy: true } };
+    dataStore.$posts.set(postURI, {
+      uri: postURI,
+      record: { text: "quoting post" },
+      embed: {
+        $type: "app.bsky.embed.record#view",
+        record: {
+          $type: "app.bsky.embed.record#viewBlocked",
+          uri: "at://did:blocked/app.bsky.feed.post/q",
+          blocked: true,
+          author: blockedAuthor,
+        },
+      },
+    });
+    const result = derived.$hydratedPosts.get(postURI);
+    assert.deepEqual(result.embed.record.author, blockedAuthor);
+  });
+
   it("should keep a third-party-blocked quote blocked when the quoted post is not loaded", () => {
     const dataStore = new DataStore(createSessionState(null));
     const { derived } = makeDerived(dataStore, {
