@@ -58,8 +58,6 @@ function unlockScroll(
   { header, main, scrollY },
   { restoreScroll = true } = {},
 ) {
-  // Not measured at lock time: iOS WebKit can report main's rect there
-  // against the pre-lock scroll offset
   const releasedMainTop = main ? main.getBoundingClientRect().top : null;
   if (main) {
     main.style.marginTop = "";
@@ -80,7 +78,6 @@ function unlockScroll(
   if (restoreScroll) {
     let scrollTo = scrollY;
     if (main) {
-      // Keeps main where it is on screen, following it if it moved while locked
       const mainDocumentTop = main.getBoundingClientRect().top + window.scrollY;
       scrollTo = mainDocumentTop - releasedMainTop;
     }
