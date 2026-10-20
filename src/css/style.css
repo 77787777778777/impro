@@ -7988,6 +7988,57 @@ sidebar-search {
   height: 24px;
 }
 
+.load-latest-button {
+  display: flex;
+  position: fixed;
+  bottom: calc(79px + var(--safe-area-inset-bottom));
+  left: 20px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--circular-button-border-radius);
+  background-color: var(--background-color);
+  color: var(--text-color-muted);
+  border: var(--hair) solid var(--post-border-color);
+  box-shadow: var(--shadow-color-light);
+  cursor: pointer;
+  z-index: var(--fab-z-index);
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.load-latest-button.has-new {
+  background-color: color-mix(
+    in srgb,
+    var(--highlight-color) 12%,
+    var(--background-color)
+  );
+  color: var(--highlight-color);
+}
+
+@media (hover: hover) {
+  .load-latest-button:hover {
+    transform: scale(1.05);
+  }
+}
+
+.load-latest-button:active {
+  transform: scale(0.95);
+}
+
+.load-latest-button app-icon {
+  width: 22px;
+  height: 22px;
+}
+
+@media (min-width: 800px) {
+  .load-latest-button {
+    bottom: 20px;
+    left: calc(50vw - 300px + 16px);
+  }
+}
+
 .mention-typeahead-host,
 .mention-typeahead-host:popover-open {
   position: fixed;

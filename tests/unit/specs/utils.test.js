@@ -39,6 +39,7 @@ import {
   AsyncValueCache,
   isPromise,
   throttleByKey,
+  debounce,
   WindowedCounter,
   Poller,
   graphemeCount,
@@ -1891,6 +1892,39 @@ describe("AsyncValueCache", () => {
     assert.deepEqual(cache.size, 2);
     assert.deepEqual(cache.peek("b"), null);
     assert.deepEqual(cache.peek("a").value, "A");
+  });
+});
+
+describe("debounce", () => {
+  beforeEach(() => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+  });
+
+  afterEach(() => {
+    mock.timers.reset();
+  });
+
+  it("calls once after calls stop, with the last arguments", () => {
+    const fn = mock.fn();
+    const debounced = debounce(fn, 100);
+    debounced("a");
+    mock.timers.tick(99);
+    debounced("b");
+    mock.timers.tick(99);
+    assert.equal(fn.mock.callCount(), 0);
+    mock.timers.tick(1);
+    assert.equal(fn.mock.callCount(), 1);
+    assert.deepEqual(fn.mock.calls[0].arguments, ["b"]);
+  });
+
+  it("calls again for calls after the delay has passed", () => {
+    const fn = mock.fn();
+    const debounced = debounce(fn, 100);
+    debounced();
+    mock.timers.tick(100);
+    debounced();
+    mock.timers.tick(100);
+    assert.equal(fn.mock.callCount(), 2);
   });
 });
 

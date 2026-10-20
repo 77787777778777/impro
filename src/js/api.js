@@ -822,10 +822,10 @@ export class Api {
     return res.data;
   }
 
-  async markNotificationsAsRead() {
+  async markNotificationsAsRead(seenAt) {
     await this.appViewRequest("app.bsky.notification.updateSeen", {
       method: "POST",
-      body: { seenAt: getCurrentTimestamp() },
+      body: { seenAt },
       parseJson: false,
     });
   }

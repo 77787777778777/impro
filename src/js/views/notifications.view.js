@@ -11,6 +11,9 @@ import {
   unique,
   TabScrollMemory,
   StickyFixer,
+  classnames,
+  debounce,
+  getCurrentTimestamp,
 } from "/js/utils.js";
 import { Signal, ReactiveStore, SignalSet } from "/js/signals.js";
 import {
@@ -48,6 +51,20 @@ import "/js/components/infinite-scroll-container.js";
 import "/js/components/container-link.js";
 import { tryAgainButtonTemplate } from "/js/templates/tryAgainButton.template.js";
 import { showToast } from "/js/toasts.js";
+
+const SCROLLED_DOWN_LIMIT = 250;
+
+function loadLatestButtonTemplate({ hasNew, onClick }) {
+  return html`<button
+    class=${classnames("load-latest-button", { "has-new": hasNew })}
+    data-testid="load-latest-button"
+    data-teststate=${hasNew ? "has-new" : "default"}
+    aria-label="Load new notifications"
+    @click=${() => onClick()}
+  >
+    <app-icon icon="arrow-up-line"></app-icon>
+  </button>`;
+}
 
 function notificationItemTemplate({ type, href, isUnread, children }) {
   const unreadClass = isUnread ? "unread" : "";
@@ -171,6 +188,7 @@ export default async function notificationsView({
   state.$loadMoreError = new Signal.State(null);
   state.$mentionLoadMoreError = new Signal.State(null);
   state.$expandedGroups = new SignalSet();
+  state.$isScrolledDown = new Signal.State(false);
 
   async function handleMenuClick() {
     layout.openSidebar();
@@ -800,20 +818,15 @@ export default async function notificationsView({
     if (window.scrollY > 0) {
       window.scrollTo({ top: -1, behavior: "smooth" });
     }
-    if (state.$activeTab.get() === "all") {
-      state.$isReloadingNotifications.set(true);
-      try {
-        await reloadNotifications();
-      } finally {
-        state.$isReloadingNotifications.set(false);
-      }
-    } else {
-      state.$isReloadingMentionNotifications.set(true);
-      try {
-        await reloadMentionNotifications();
-      } finally {
-        state.$isReloadingMentionNotifications.set(false);
-      }
+    const $isReloading =
+      state.$activeTab.get() === "all"
+        ? state.$isReloadingNotifications
+        : state.$isReloadingMentionNotifications;
+    $isReloading.set(true);
+    try {
+      await reloadTabs();
+    } finally {
+      $isReloading.set(false);
     }
   }
 
@@ -843,6 +856,15 @@ export default async function notificationsView({
     scrollAndReloadNotifications();
   });
 
+  bindToPage(
+    root,
+    window,
+    "scroll",
+    debounce(() => {
+      state.$isScrolledDown.set(window.scrollY > SCROLLED_DOWN_LIMIT);
+    }, 100),
+  );
+
   bindPageTitle(root, () => "Notifications");
 
   pageEffect(root, () => {
@@ -862,6 +884,12 @@ export default async function notificationsView({
       groupNotificationsByType(mentionNotifications);
     const mentionCursor = dataLayer.derived.$mentionNotificationCursor.get();
     const mentionHasMore = !!mentionCursor;
+
+    const hasNew =
+      activeTab === "all" &&
+      notificationService.$numNotifications.get() > 0 &&
+      !notificationsRequestStatus.loading;
+    const showLoadLatestButton = state.$isScrolledDown.get() || hasNew;
 
     const isLoading =
       activeTab === "all"
@@ -931,6 +959,12 @@ export default async function notificationsView({
             })()}
           </div>
         </main>
+        ${showLoadLatestButton
+          ? loadLatestButtonTemplate({
+              hasNew,
+              onClick: scrollAndReloadNotifications,
+            })
+          : ""}
         ${isAuthenticated
           ? floatingComposeButtonTemplate({
               disabled: !currentUser,
@@ -946,12 +980,14 @@ export default async function notificationsView({
   onPageShow(root, () => fixedHeader.start());
 
   async function loadNotifications({ reload = false } = {}) {
+    const seenAt = getCurrentTimestamp();
+    notificationService.clearNumNotifications();
     await dataLayer.requests.loadNotifications({
       reload,
       limit: NOTIFICATIONS_PAGE_SIZE,
     });
     // can be called async
-    notificationService.markNotificationsAsRead();
+    notificationService.markNotificationsAsRead(seenAt);
   }
 
   async function loadMentionNotifications({ reload = false } = {}) {
@@ -982,11 +1018,9 @@ export default async function notificationsView({
     const loadError =
       dataLayer.requests.statusStore.getError("loadNotifications");
     if (hadNotifications && loadError) {
-      console.warn(loadError);
-      showToast("Couldn't refresh notifications", { style: "error" });
-    } else {
-      state.$loadMoreError.set(null);
+      throw loadError;
     }
+    state.$loadMoreError.set(null);
   }
 
   async function reloadMentionNotifications() {
@@ -996,16 +1030,37 @@ export default async function notificationsView({
       "loadMentionNotifications",
     );
     if (hadNotifications && loadError) {
+      throw loadError;
+    }
+    state.$mentionLoadMoreError.set(null);
+  }
+
+  // Reloads the active tab, and refreshes the hidden one in the background
+  // (only once it has been loaded) so switching tabs doesn't show stale data
+  async function reloadTabs() {
+    const activeTab = state.$activeTab.get();
+    if (activeTab === "mentions") {
+      reloadNotifications().catch(console.warn);
+    } else if (dataLayer.derived.$mentionNotifications.get()) {
+      reloadMentionNotifications().catch(console.warn);
+    }
+    try {
+      if (activeTab === "all") {
+        await reloadNotifications();
+      } else {
+        await reloadMentionNotifications();
+      }
+    } catch (error) {
+      console.warn(error);
       showToast("Couldn't refresh notifications", { style: "error" });
-    } else {
-      state.$mentionLoadMoreError.set(null);
     }
   }
 
   onPageShow(root, async ({ scrollY }) => {
-    if (scrollY <= 200) {
+    state.$isScrolledDown.set(scrollY > SCROLLED_DOWN_LIMIT);
+    if (scrollY <= SCROLLED_DOWN_LIMIT) {
       window.scrollTo(0, 0);
-      await reloadNotifications();
+      await reloadTabs();
     }
   });
 }
