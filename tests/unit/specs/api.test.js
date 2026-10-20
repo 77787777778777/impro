@@ -1173,13 +1173,13 @@ describe("markNotificationsAsRead", () => {
     const session = createMockSession({});
     const api = new Api(session);
 
-    await api.markNotificationsAsRead();
+    await api.markNotificationsAsRead("2026-01-01T00:00:00.000Z");
 
     const { url, options } = session.getLastFetchOptions();
     assert(url.includes("app.bsky.notification.updateSeen"));
     assert.deepEqual(options.method, "POST");
     const body = JSON.parse(options.body);
-    assert(body.seenAt !== undefined);
+    assert.deepEqual(body.seenAt, "2026-01-01T00:00:00.000Z");
   });
 });
 
