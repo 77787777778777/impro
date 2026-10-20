@@ -3939,6 +3939,14 @@ image-carousel {
   height: 20px;
 }
 
+.notification-authors-show {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .notification-authors-hide {
   display: flex;
   align-items: center;

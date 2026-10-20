@@ -361,30 +361,32 @@ export default async function notificationsView({
       `;
     }
     return html`
-      <button
-        type="button"
-        class="notification-avatars notification-authors-toggle"
-        data-testid="notification-authors-toggle"
-        data-teststate="collapsed"
-        aria-label="Show all users"
-        @click=${() => toggleAuthorsExpanded(groupKey)}
-      >
+      <div class="notification-avatars">
         ${authors
           .slice(0, maxAvatars)
           .map(
             (author) => html`
               <div class="notification-avatar">
-                ${avatarTemplate({ author, clickAction: "none" })}
+                ${avatarTemplate({ author })}
               </div>
             `,
           )}
-        ${authors.length > maxAvatars
-          ? html`<div class="notification-more">
-              +${authors.length - maxAvatars}
-            </div>`
-          : ""}
-        <app-icon icon="chevron-down-line"></app-icon>
-      </button>
+        <button
+          type="button"
+          class="notification-authors-toggle notification-authors-show"
+          data-testid="notification-authors-toggle"
+          data-teststate="collapsed"
+          aria-label="Show all users"
+          @click=${() => toggleAuthorsExpanded(groupKey)}
+        >
+          ${authors.length > maxAvatars
+            ? html`<div class="notification-more">
+                +${authors.length - maxAvatars}
+              </div>`
+            : ""}
+          <app-icon icon="chevron-down-line"></app-icon>
+        </button>
+      </div>
     `;
   }
 

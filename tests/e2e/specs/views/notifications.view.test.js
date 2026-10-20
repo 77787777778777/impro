@@ -341,6 +341,43 @@ test.describe("Notifications view", () => {
     await expect(item.locator(".notification-avatar")).toHaveCount(3);
   });
 
+  test("should navigate to a profile when clicking an avatar in a collapsed author list", async ({
+    page,
+  }) => {
+    const likedPost = createPost({
+      uri: "at://did:plc:testuser123/app.bsky.feed.post/popular1",
+      text: "Popular post",
+      authorHandle: "testuser.bsky.social",
+      authorDisplayName: "Test User",
+    });
+
+    const mockServer = new MockServer();
+    mockServer.addPosts([likedPost]);
+    mockServer.addNotifications(
+      [alice, bob].map((author) =>
+        createNotification({
+          reason: "like",
+          author,
+          reasonSubject: likedPost.uri,
+          indexedAt: new Date().toISOString(),
+        }),
+      ),
+    );
+    await mockServer.setup(page);
+
+    await login(page);
+    await page.goto("/notifications");
+
+    const item = page.locator("#notifications-view .notification-item");
+    await expect(item).toHaveCount(1, { timeout: 10000 });
+    await expect(
+      item.locator('[data-testid="notification-authors-toggle"]'),
+    ).toHaveAttribute("data-teststate", "collapsed");
+
+    await item.locator(".notification-avatar").nth(1).click();
+    await expect(page).toHaveURL(/\/profile\/bob\.bsky\.social$/);
+  });
+
   test("should not show an author list toggle for a single author", async ({
     page,
   }) => {
