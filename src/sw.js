@@ -15,18 +15,13 @@ self.addEventListener("push", (event) => {
         includeUncontrolled: true,
       });
       const focused = clients.filter((client) => client.focused);
-      // A focused window is asked to confirm it is alive before the system
-      // notification is skipped. A window whose renderer is suspended (the
-      // OS froze the app) still reports focused=true but never answers, so
-      // without the reply check those pushes vanish with no trace.
+      // If a client is active, skip showing the notification
       let answered = false;
       if (focused.length > 0) {
         const requestId = crypto.randomUUID();
         const channel = new MessageChannel();
         const reply = new Promise((resolve) => {
           const timer = setTimeout(() => resolve(false), 1000);
-          // Keep a pending fallback from holding the worker (or a test
-          // process) open.
           if (typeof timer.unref === "function") timer.unref();
           channel.port1.onmessage = (event) => {
             if (event.data?.type !== "push-received-ack") return;
