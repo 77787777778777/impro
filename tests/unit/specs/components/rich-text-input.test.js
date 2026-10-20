@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import "/js/components/rich-text-input.js";
+import { createProfile } from "../../../shared/factories.js";
 
 describe("rich-text-input", () => {
   beforeEach(() => {
@@ -760,6 +761,62 @@ describe("rich-text-input", () => {
       assert(typeahead.classList.contains("mention-typeahead-above"));
       assert.deepEqual(typeahead.style.bottom, `${window.innerHeight - 100}px`);
       assert.deepEqual(typeahead.style.top, "");
+      element.closeTypeahead();
+    });
+  });
+
+  describe("RichTextInput - mention suggestion badges", () => {
+    let originalFetch;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          actors: [
+            createProfile({
+              did: "did:plc:plain",
+              handle: "plain.test",
+              displayName: "Plain",
+            }),
+            createProfile({
+              did: "did:plc:bot",
+              handle: "bot.test",
+              displayName: "Bot",
+              labels: [{ val: "bot" }],
+              verification: {
+                verifiedStatus: "valid",
+                trustedVerifierStatus: "none",
+              },
+            }),
+          ],
+        }),
+      });
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it("shows verification and automated account badges on suggestions", async () => {
+      const element = document.createElement("rich-text-input");
+      document.body.appendChild(element);
+      element.setText("Hi @b");
+      element.detectPendingMention = () => ({ query: "b", start: 3, end: 5 });
+
+      await element.updateMentionSuggestions();
+
+      const suggestions = document.querySelectorAll(".mention-suggestion");
+      assert.deepEqual(suggestions.length, 2);
+      for (const testid of ["verification-badge", "automated-account-badge"]) {
+        assert.deepEqual(
+          suggestions[0].querySelector(`[data-testid='${testid}']`),
+          null,
+        );
+        assert(
+          suggestions[1].querySelector(`[data-testid='${testid}']`) !== null,
+        );
+      }
       element.closeTypeahead();
     });
   });

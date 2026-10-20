@@ -3955,10 +3955,6 @@ image-carousel {
   border-bottom: none;
 }
 
-.notification-text .automated-account-badge {
-  margin-left: 4px;
-}
-
 .notification-more {
   width: 24px;
   height: 36px;
@@ -6052,19 +6048,26 @@ emoji-picker-dialog emoji-picker,
   height: 12px;
 }
 
-.profile-info .verification-badge {
-  margin-left: 6px;
-  margin-bottom: 2px;
-}
-
-.profile-list-item .verification-badge {
+.profile-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
   margin-left: 3px;
   margin-bottom: 2px;
 }
 
-.notification-text .verification-badge {
-  margin-left: 4px;
-  margin-bottom: 2px;
+.post-header-text > .profile-badges,
+.profile-hover-card-name > .profile-badges,
+.chat-info-panel-name > .profile-badges,
+.chat-join-link-embed-owner > .profile-badges {
+  margin: 0;
+}
+
+.profile-info .profile-badges {
+  gap: 6px;
+  margin-left: 6px;
 }
 
 .profile-name .verification-badge app-icon {
@@ -6088,16 +6091,6 @@ emoji-picker-dialog emoji-picker,
 .automated-account-badge app-icon {
   width: 12px;
   height: 12px;
-}
-
-.profile-info .automated-account-badge {
-  margin-left: 6px;
-  margin-bottom: 2px;
-}
-
-.profile-list-item .automated-account-badge {
-  margin-left: 3px;
-  margin-bottom: 2px;
 }
 
 .profile-name .automated-account-badge app-icon {
@@ -9697,11 +9690,6 @@ context-menu-item-group > context-menu-item > button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.account-switcher-display-name .verification-badge,
-.account-switcher-display-name .automated-account-badge {
-  margin-left: 4px;
 }
 
 .account-switcher-handle {
