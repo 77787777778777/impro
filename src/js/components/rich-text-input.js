@@ -2,6 +2,7 @@ import { html, render } from "/js/lib/lit-html.js";
 import { Component } from "/js/components/component.js";
 import { getUnresolvedFacetsFromText } from "/js/facetHelpers.js";
 import { avatarTemplate } from "/js/templates/avatar.template.js";
+import { profileBadgesTemplate } from "/js/templates/profileBadges.template.js";
 import { getDisplayName } from "/js/dataHelpers.js";
 import { getIndexFromByteIndex, getByteLength } from "/js/utils.js";
 import { TYPEAHEAD_SERVICE_URL } from "/js/config.js";
@@ -315,7 +316,9 @@ function mentionSuggestionsTemplate({
             })}
             <div class="mention-suggestion-text">
               <div class="mention-suggestion-name">
-                ${getDisplayName(actor)}
+                ${getDisplayName(actor)}${profileBadgesTemplate({
+                  profile: actor,
+                })}
               </div>
               <div
                 class="mention-suggestion-handle"
