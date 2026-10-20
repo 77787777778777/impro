@@ -94,6 +94,38 @@ describe("sidebar-search", () => {
     assert.deepEqual(results[0].getAttribute("href"), "/profile/alice.test");
   });
 
+  it("shows verification and automated account badges on typeahead results", async () => {
+    const { element } = await mount({
+      actors: [
+        alice,
+        createProfile({
+          did: "did:plc:bot",
+          handle: "bot.test",
+          displayName: "Bot",
+          labels: [{ val: "bot" }],
+          verification: {
+            verifiedStatus: "valid",
+            trustedVerifierStatus: "none",
+          },
+        }),
+      ],
+    });
+
+    await type(element, "b");
+
+    const results = element.querySelectorAll(
+      "[data-testid='sidebar-search-typeahead-result']",
+    );
+    assert.deepEqual(results.length, 2);
+    for (const testid of ["verification-badge", "automated-account-badge"]) {
+      assert.deepEqual(
+        results[0].querySelector(`[data-testid='${testid}']`),
+        null,
+      );
+      assert(results[1].querySelector(`[data-testid='${testid}']`) !== null);
+    }
+  });
+
   it("keeps its results out of the search view's typeahead store", async () => {
     const { element, dataLayer } = await mount();
     dataLayer.dataStore.$searchTypeaheadResults.set({

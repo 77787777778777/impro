@@ -39,8 +39,7 @@ import {
   parseUri,
 } from "/js/dataHelpers.js";
 import { getGifFromPost } from "/js/embedHelpers.js";
-import { automatedAccountBadgeTemplate } from "/js/templates/automatedAccountBadge.template.js";
-import { verificationBadgeTemplate } from "/js/templates/verificationBadge.template.js";
+import { profileBadgesTemplate } from "/js/templates/profileBadges.template.js";
 import { getTimestampFromRkey } from "/js/atproto.js";
 import { profileListItemTemplate } from "/js/templates/profileList.template.js";
 import "/js/components/tab-bar.js";
@@ -402,11 +401,7 @@ export default async function notificationsView({
     return html`<span
       ><a class="notification-profile-link" href="${linkToProfile(firstAuthor)}"
         >${displayName}</a
-      >${verificationBadgeTemplate({
-        profile: firstAuthor,
-      })}${automatedAccountBadgeTemplate({
-        profile: firstAuthor,
-      })}${otherCount > 0
+      >${profileBadgesTemplate({ profile: firstAuthor })}${otherCount > 0
         ? html`<span>
             and
             <strong
@@ -716,12 +711,8 @@ export default async function notificationsView({
             Your contact
             <a class="notification-profile-link" href="${profileLink}"
               >${displayName}</a
-            >${verificationBadgeTemplate({
-              profile: firstNotif.author,
-            })}${automatedAccountBadgeTemplate({
-              profile: firstNotif.author,
-            })}
-            is on Bluesky
+            >${profileBadgesTemplate({ profile: firstNotif.author })} is on
+            Bluesky
             <span class="notification-time">· ${timeAgo}</span>
           </div>
         </div>
