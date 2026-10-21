@@ -98,20 +98,39 @@ function applyLabels(post, preferences) {
   );
 }
 
-// Match social-app: hide notifications from blocked / muted
-// users unless the viewer follows them (a follow overrides a mute).
-function shouldHideNotification(notification) {
+function isHideableOffenseLabel(label) {
+  return label.val === "!hide" || label.val === "!takedown";
+}
+
+function isAccountLabel(label) {
+  return !label.uri.endsWith("/app.bsky.actor.profile/self");
+}
+
+function shouldHideNotification(notification, preferences) {
+  const author = notification.author;
+  if (author.labels?.some(isHideableOffenseLabel)) return true;
   if (
     notification.reason === "subscribed-post" &&
     notification.post?.viewer?.hasMutedWord
   ) {
     return true;
   }
-  const viewer = notification.author?.viewer;
-  if (!viewer) return false;
-  if (viewer.blocking) return true;
-  if (viewer.muted && !viewer.following) return true;
-  return false;
+  if (author.viewer?.blocking) return true;
+  if (
+    preferences &&
+    ["reply", "mention", "quote"].includes(notification.reason) &&
+    notification.post &&
+    preferences.hasHideLabel(notification.post.labels ?? [])
+  ) {
+    return true;
+  }
+  if (author.viewer?.following) return false;
+  if (author.viewer?.muted) return true;
+  if (!preferences) return false;
+  return preferences.hasHideLabel([
+    ...(notification.labels ?? []),
+    ...(author.labels ?? []).filter(isAccountLabel),
+  ]);
 }
 
 function filterBlockedReactions(reactions, memberProfiles) {
@@ -315,16 +334,22 @@ export class Derived extends ReactiveStore {
     this.$notifications = new Signal.Computed(() => {
       const data = this.dataStore.$notifications.get();
       if (!data) return null;
+      const preferences = this.$preferences.get();
       return data.notifications
         .map((notification) => this.hydrateNotification(notification))
-        .filter((notification) => !shouldHideNotification(notification));
+        .filter(
+          (notification) => !shouldHideNotification(notification, preferences),
+        );
     });
     this.$mentionNotifications = new Signal.Computed(() => {
       const data = this.dataStore.$mentionNotifications.get();
       if (!data) return null;
+      const preferences = this.$preferences.get();
       return data.notifications
         .map((notification) => this.hydrateNotification(notification))
-        .filter((notification) => !shouldHideNotification(notification));
+        .filter(
+          (notification) => !shouldHideNotification(notification, preferences),
+        );
     });
     this.$hydratedPostThreads = new ComputedMap((postURI) => {
       const postThread = this.dataStore.$postThreads.get(postURI);

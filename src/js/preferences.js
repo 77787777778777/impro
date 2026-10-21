@@ -576,6 +576,14 @@ export class Preferences {
     return currentLabel;
   }
 
+  hasHideLabel(labels) {
+    return labels.some((label) => {
+      const result = this.getLabelDefinitionAndLabeler(label);
+      if (!result) return false;
+      return this.getLabelVisibility(label, result.labelDefinition) === "hide";
+    });
+  }
+
   isPostHidden(postUri) {
     const hiddenPostsPreference = Preferences.getHiddenPostsPreference(
       this.obj,

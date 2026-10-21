@@ -17,6 +17,7 @@ import {
   createProfile,
   createFeedItem,
   createThreadViewPost,
+  createLabelerView,
 } from "../../../shared/factories.js";
 import { trackDisposable } from "../../testHelpers.js";
 
@@ -52,6 +53,7 @@ function fakePreferences(overrides = {}) {
     getProfileBlurLabel: () => null,
     getBadgeLabelsForProfile: () => [],
     getFollowingFeedPreference: () => null,
+    hasHideLabel: () => false,
     clone() {
       return this;
     },
@@ -2011,6 +2013,188 @@ describe("$notifications", () => {
     assert.deepEqual(derived.$notifications.get()[0].isRead, true);
     dataStore.$notificationsLastSeenAt.set("2025-01-15T10:00:00.000Z");
     assert.deepEqual(derived.$notifications.get()[0].isRead, false);
+  });
+
+  describe("label moderation", () => {
+    const labelerDid = "did:plc:labeler";
+    const following = "at://did:plc:me/app.bsky.graph.follow/1";
+
+    function makeLabelPreferences() {
+      const labelerDefs = [
+        createLabelerView({
+          did: labelerDid,
+          handle: "labeler.test",
+          labelDefinitions: [
+            { identifier: "spam", blurs: "content", defaultSetting: "hide" },
+            { identifier: "rude", blurs: "content", defaultSetting: "warn" },
+          ],
+        }),
+      ];
+      return new Preferences([], labelerDefs);
+    }
+
+    function accountLabel(did, val, src = labelerDid) {
+      return { src, uri: did, val, cts: "2025-01-01T00:00:00.000Z" };
+    }
+
+    function profileRecordLabel(did, val) {
+      return {
+        src: labelerDid,
+        uri: `at://${did}/app.bsky.actor.profile/self`,
+        val,
+        cts: "2025-01-01T00:00:00.000Z",
+      };
+    }
+
+    function labeledAuthor(labels, viewer = {}) {
+      return createProfile({
+        did: "did:plc:labeled",
+        handle: "labeled.test",
+        labels,
+        viewer,
+      });
+    }
+
+    function hydratedUris(derived) {
+      return derived.$notifications
+        .get()
+        .map((notification) => notification.uri);
+    }
+
+    it("should hide notifications from authors with a hide account label", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const labeled = labeledAuthor([accountLabel("did:plc:labeled", "spam")]);
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author, uri: "n1" }),
+        createNotification({ reason: "follow", author: labeled, uri: "n2" }),
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    it("should keep notifications from authors with a warn account label", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const labeled = labeledAuthor([accountLabel("did:plc:labeled", "rude")]);
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author: labeled, uri: "n1" }),
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    it("should ignore hide labels on the author's profile record", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const labeled = labeledAuthor([
+        profileRecordLabel("did:plc:labeled", "spam"),
+      ]);
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author: labeled, uri: "n1" }),
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    it("should keep notifications from followed authors with a hide account label", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const labeled = labeledAuthor([accountLabel("did:plc:labeled", "spam")], {
+        following,
+      });
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author: labeled, uri: "n1" }),
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    it("should hide notifications from followed authors with !hide or !takedown", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const hidden = createProfile({
+        did: "did:plc:hidden",
+        handle: "hidden.test",
+        labels: [accountLabel("did:plc:hidden", "!hide", "did:plc:mod")],
+        viewer: { following },
+      });
+      const takenDown = createProfile({
+        did: "did:plc:takendown",
+        handle: "takendown.test",
+        labels: [accountLabel("did:plc:takendown", "!takedown", "did:plc:mod")],
+        viewer: { following },
+      });
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author, uri: "n1" }),
+        createNotification({ reason: "follow", author: hidden, uri: "n2" }),
+        createNotification({ reason: "follow", author: takenDown, uri: "n3" }),
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    it("should hide notifications carrying a hide label themselves", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const labeledNotification = {
+        ...createNotification({ reason: "follow", author, uri: "n2" }),
+        labels: [accountLabel("n2", "spam")],
+      };
+      seedNotifications(dataStore, [
+        createNotification({ reason: "follow", author, uri: "n1" }),
+        labeledNotification,
+      ]);
+      assert.deepEqual(hydratedUris(derived), ["n1"]);
+    });
+
+    for (const reason of ["reply", "mention", "quote"]) {
+      it(`should hide ${reason} notifications whose post has a hide label, even from followed authors`, () => {
+        const dataStore = new DataStore(createSessionState(null));
+        const { derived } = makeDerived(dataStore, {
+          preferences: makeLabelPreferences(),
+        });
+        const followed = createProfile({
+          did: "did:plc:followed",
+          handle: "followed.test",
+          viewer: { following },
+        });
+        dataStore.$posts.set("labeled", {
+          uri: "labeled",
+          author: followed,
+          record: { text: "x" },
+          labels: [accountLabel("labeled", "spam")],
+        });
+        dataStore.$posts.set("clean", {
+          uri: "clean",
+          author: followed,
+          record: { text: "y" },
+          labels: [],
+        });
+        seedNotifications(dataStore, [
+          createNotification({
+            reason,
+            author: followed,
+            uri: "labeled",
+            record: {},
+          }),
+          createNotification({
+            reason,
+            author: followed,
+            uri: "clean",
+            record: {},
+          }),
+        ]);
+        assert.deepEqual(hydratedUris(derived), ["clean"]);
+      });
+    }
   });
 });
 

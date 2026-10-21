@@ -2331,6 +2331,75 @@ describe("Preferences.getProfileBlurLabel", () => {
   });
 });
 
+describe("Preferences.hasHideLabel", () => {
+  const labelerDefs = [
+    {
+      creator: { did: "did:labeler1", handle: "labeler.test" },
+      policies: {
+        labelValueDefinitions: [
+          { identifier: "spam", blurs: "content", defaultSetting: "warn" },
+          { identifier: "verified", blurs: "none", defaultSetting: "hide" },
+        ],
+      },
+    },
+  ];
+
+  it("should return false when there are no labels", () => {
+    const preferences = new Preferences([], labelerDefs);
+    assert.deepEqual(preferences.hasHideLabel([]), false);
+  });
+
+  it("should return false for a label whose visibility is warn", () => {
+    const preferences = new Preferences([], labelerDefs);
+    assert.deepEqual(
+      preferences.hasHideLabel([{ src: "did:labeler1", val: "spam" }]),
+      false,
+    );
+  });
+
+  it("should return true when the user's preference sets a label to hide", () => {
+    const preferences = new Preferences(
+      [
+        {
+          $type: "app.bsky.actor.defs#contentLabelPref",
+          label: "spam",
+          labelerDid: "did:labeler1",
+          visibility: "hide",
+        },
+      ],
+      labelerDefs,
+    );
+    assert.deepEqual(
+      preferences.hasHideLabel([{ src: "did:labeler1", val: "spam" }]),
+      true,
+    );
+  });
+
+  it("should return true for hide labels regardless of blur type", () => {
+    const preferences = new Preferences([], labelerDefs);
+    assert.deepEqual(
+      preferences.hasHideLabel([{ src: "did:labeler1", val: "verified" }]),
+      true,
+    );
+  });
+
+  it("should return true for global labels that default to hide", () => {
+    const preferences = new Preferences([], []);
+    assert.deepEqual(
+      preferences.hasHideLabel([{ src: "did:plc:author", val: "!hide" }]),
+      true,
+    );
+  });
+
+  it("should ignore labels from labelers the user doesn't subscribe to", () => {
+    const preferences = new Preferences([], labelerDefs);
+    assert.deepEqual(
+      preferences.hasHideLabel([{ src: "did:labeler2", val: "spam" }]),
+      false,
+    );
+  });
+});
+
 describe("Preferences.getContentLabelPref", () => {
   it("should return matching content label preference", () => {
     const labelerDid = "did:plc:testlabeler";
