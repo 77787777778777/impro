@@ -973,6 +973,22 @@ describe("loadNextAuthorFeedPage", () => {
     assert.deepEqual(capturedParams.includePins, false);
   });
 
+  it("should use posts_with_video filter for videos feedType", async () => {
+    let capturedParams;
+    const mockApi = {
+      getAuthorFeed: async (_did, params) => {
+        capturedParams = params;
+        return { feed: [], cursor: null };
+      },
+    };
+    const requests = makeRequests(mockApi);
+
+    await requests.loadNextAuthorFeedPage(did, "videos");
+
+    assert.deepEqual(capturedParams.filter, "posts_with_video");
+    assert.deepEqual(capturedParams.includePins, false);
+  });
+
   it("should call getActorLikes for likes feedType", async () => {
     let actorLikesCalled = false;
     let authorFeedCalled = false;
