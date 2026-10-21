@@ -1547,6 +1547,8 @@ export default async function chatDetailView({
                       })
                     : ""}
                   <chat-input
+                    .searchMentions=${(query) =>
+                      dataLayer.declarative.searchMentions(query)}
                     @send=${(e) =>
                       handleSendMessage(e.detail.message, e.detail.onSuccess)}
                     @input-change=${(e) => handleComposerInput(e.detail)}

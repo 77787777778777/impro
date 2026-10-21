@@ -134,6 +134,18 @@ function shouldHideNotification(notification, preferences) {
   ]);
 }
 
+// Match social-app: an exact handle match stays visible (so the account
+// can still be reached) unless it carries a !hide / !takedown label.
+function shouldHideTypeaheadProfile(profile, query, preferences) {
+  const accountLabels = (profile.labels ?? []).filter(isAccountLabel);
+  if (profile.handle.toLowerCase() === query.toLowerCase().trim()) {
+    return accountLabels.some(isHideableOffenseLabel);
+  }
+  if (profile.viewer?.blocking || profile.viewer?.blockedBy) return true;
+  if (!preferences) return false;
+  return preferences.hasHideLabel(accountLabels);
+}
+
 function filterBlockedReactions(reactions, memberProfiles) {
   return (reactions || []).filter((reaction) => {
     const profile = memberProfiles.find(
@@ -460,12 +472,17 @@ export class Derived extends ReactiveStore {
     this.$searchTypeaheadResults = new Signal.Computed(() => {
       const data = this.dataStore.$searchTypeaheadResults.get();
       if (!data) return null;
-      return data.actors.map((actor) => this.$hydratedProfiles.get(actor.did));
+      return this.hydrateTypeaheadResults(data);
     });
     this.$sidebarSearchTypeaheadResults = new Signal.Computed(() => {
       const data = this.dataStore.$sidebarSearchTypeaheadResults.get();
       if (!data) return null;
-      return data.actors.map((actor) => this.$hydratedProfiles.get(actor.did));
+      return this.hydrateTypeaheadResults(data);
+    });
+    this.$mentionTypeaheadResults = new Signal.Computed(() => {
+      const data = this.dataStore.$mentionTypeaheadResults.get();
+      if (!data) return null;
+      return this.hydrateTypeaheadResults(data);
     });
     this.$recentSearchTerms = new Signal.Computed(() => {
       const preferences = this.$preferences.get();
@@ -532,12 +549,16 @@ export class Derived extends ReactiveStore {
     this.$postLanguageHistory = new Signal.Computed(() =>
       this.sessionState.$postLanguageHistory.get(),
     );
-    this.$postSearchResultsTop = new Signal.Computed(() =>
-      this.hydratePostSearchResults(this.dataStore.$postSearchResultsTop),
-    );
-    this.$postSearchResultsLatest = new Signal.Computed(() =>
-      this.hydratePostSearchResults(this.dataStore.$postSearchResultsLatest),
-    );
+    this.$postSearchResultsTop = new Signal.Computed(() => {
+      const data = this.dataStore.$postSearchResultsTop.get();
+      if (!data) return null;
+      return this.hydratePostSearchResults(data);
+    });
+    this.$postSearchResultsLatest = new Signal.Computed(() => {
+      const data = this.dataStore.$postSearchResultsLatest.get();
+      if (!data) return null;
+      return this.hydratePostSearchResults(data);
+    });
     this.$postSearchCursorTop = new Signal.Computed(
       () => this.dataStore.$postSearchResultsTop.get()?.cursor ?? null,
     );
@@ -1065,9 +1086,19 @@ export class Derived extends ReactiveStore {
     };
   }
 
-  hydratePostSearchResults($storedResults) {
-    const data = $storedResults.get();
-    if (!data) return null;
+  hydrateTypeaheadResults(data) {
+    const currentUserDid = this.$currentUser.get()?.did;
+    const preferences = this.$preferences.get();
+    return data.actors
+      .map((actor) => this.$hydratedProfiles.get(actor.did))
+      .filter(
+        (profile) =>
+          profile.did === currentUserDid ||
+          !shouldHideTypeaheadProfile(profile, data.query, preferences),
+      );
+  }
+
+  hydratePostSearchResults(data) {
     const hydratedSearchResults = [];
     for (const result of data.posts) {
       const post = this.$hydratedPosts.get(result.uri);

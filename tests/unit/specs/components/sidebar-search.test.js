@@ -102,7 +102,14 @@ describe("sidebar-search", () => {
           did: "did:plc:bot",
           handle: "bot.test",
           displayName: "Bot",
-          labels: [{ val: "bot" }],
+          labels: [
+            {
+              src: "did:plc:bot",
+              uri: "at://did:plc:bot/app.bsky.actor.profile/self",
+              val: "bot",
+              cts: "2025-01-01T00:00:00.000Z",
+            },
+          ],
           verification: {
             verifiedStatus: "valid",
             trustedVerifierStatus: "none",

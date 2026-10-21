@@ -1439,6 +1439,7 @@ describe("loadSearchTypeahead", () => {
 
     const stored = dataStore.$searchTypeaheadResults.get();
     assert.deepEqual(stored.actors.length, 1);
+    assert.deepEqual(stored.query, "alice");
     assert.deepEqual(stored.actors[0].did, "did:plc:a");
     assert.deepEqual(dataStore.$profiles.get("did:plc:a"), {
       did: "did:plc:a",
@@ -1478,6 +1479,25 @@ describe("loadSearchTypeahead", () => {
     resolveSearch();
     await inFlight;
 
+    assert.deepEqual(dataStore.$searchTypeaheadResults.get(), null);
+  });
+});
+
+describe("loadMentionTypeahead", () => {
+  it("should store the search results with their query", async () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const mockApi = {
+      searchProfilesTypeahead: async () => ({
+        actors: [{ did: "did:plc:a", handle: "a.test" }],
+      }),
+    };
+    const requests = makeRequests(mockApi, dataStore);
+
+    await requests.loadMentionTypeahead("alice");
+
+    const stored = dataStore.$mentionTypeaheadResults.get();
+    assert.deepEqual(stored.actors[0].did, "did:plc:a");
+    assert.deepEqual(stored.query, "alice");
     assert.deepEqual(dataStore.$searchTypeaheadResults.get(), null);
   });
 });

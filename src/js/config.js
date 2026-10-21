@@ -23,7 +23,6 @@ export const BSKY_CHAT_SERVICE_DID = "did:web:api.bsky.chat#bsky_chat";
 // Bluesky-operated services
 export const PUBLIC_SERVICE_ENDPOINT_URL = "https://public.api.bsky.app";
 export const HANDLE_RESOLVER_SERVICE_URL = "https://public.api.bsky.app";
-export const TYPEAHEAD_SERVICE_URL = "https://public.api.bsky.app";
 export const LINK_CARD_SERVICE_URL = "https://cardyb.bsky.app";
 export const OG_CARD_SERVICE_URL = "https://ogcard.cdn.bsky.app";
 export const CDN_URL = "https://cdn.bsky.app";

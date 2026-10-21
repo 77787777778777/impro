@@ -674,7 +674,7 @@ export class Requests {
       return;
     }
     this.dataStore.setProfiles(searchData.actors);
-    $results.set(searchData);
+    $results.set({ ...searchData, query });
   }
 
   async loadChatRecipientSearch(query, { limit = 12 } = {}) {
@@ -699,6 +699,14 @@ export class Requests {
       $results: this.dataStore.$sidebarSearchTypeaheadResults,
       $latestRequestTime:
         this.dataStore.$latestSidebarSearchTypeaheadRequestTime,
+    });
+  }
+
+  async loadMentionTypeahead(query, { limit = 8 } = {}) {
+    await this._loadProfileTypeahead(query, {
+      limit,
+      $results: this.dataStore.$mentionTypeaheadResults,
+      $latestRequestTime: this.dataStore.$latestMentionTypeaheadRequestTime,
     });
   }
 

@@ -2681,9 +2681,191 @@ describe("actor search results", () => {
     const { derived } = makeDerived(dataStore);
     assert.deepEqual(derived.$searchTypeaheadResults.get(), null);
     seedProfile(dataStore);
-    dataStore.$searchTypeaheadResults.set({ actors: [{ did }] });
+    dataStore.$searchTypeaheadResults.set({ actors: [{ did }], query: "fo" });
     const result = derived.$searchTypeaheadResults.get();
     assert.deepEqual(result[0].handle, "found.test");
+  });
+
+  describe("typeahead moderation", () => {
+    const labelerDid = "did:plc:labeler";
+
+    function makeLabelPreferences() {
+      return new Preferences(
+        [],
+        [
+          createLabelerView({
+            did: labelerDid,
+            handle: "labeler.test",
+            labelDefinitions: [
+              { identifier: "spam", blurs: "content", defaultSetting: "hide" },
+            ],
+          }),
+        ],
+      );
+    }
+
+    function accountLabel(profileDid, val, src = labelerDid) {
+      return { src, uri: profileDid, val, cts: "2025-01-01T00:00:00.000Z" };
+    }
+
+    function seedTypeahead(dataStore, $results, profiles, query) {
+      dataStore.setProfiles(profiles);
+      $results.set({
+        actors: profiles.map((profile) => ({ did: profile.did })),
+        query,
+      });
+    }
+
+    const plain = createProfile({ did: "did:plc:plain", handle: "al.test" });
+    const blocking = createProfile({
+      did: "did:plc:blocking",
+      handle: "alblocked.test",
+      viewer: { blocking: "at://did:plc:me/app.bsky.graph.block/1" },
+    });
+    const blockedBy = createProfile({
+      did: "did:plc:blockedby",
+      handle: "alblocker.test",
+      viewer: { blockedBy: true },
+    });
+    const muted = createProfile({
+      did: "did:plc:muted",
+      handle: "almuted.test",
+      viewer: { muted: true },
+    });
+    const labeled = createProfile({
+      did: "did:plc:labeled",
+      handle: "allabeled.test",
+      labels: [accountLabel("did:plc:labeled", "spam")],
+    });
+    const profileRecordLabeled = createProfile({
+      did: "did:plc:profilelabeled",
+      handle: "alprofile.test",
+      labels: [
+        {
+          src: labelerDid,
+          uri: "at://did:plc:profilelabeled/app.bsky.actor.profile/self",
+          val: "spam",
+          cts: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    function resultHandles(profiles) {
+      return profiles.map((profile) => profile.handle);
+    }
+
+    it("should hide blocked, blocking, and hide-labeled accounts but keep muted ones", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      seedTypeahead(
+        dataStore,
+        dataStore.$searchTypeaheadResults,
+        [plain, blocking, blockedBy, muted, labeled, profileRecordLabeled],
+        "al",
+      );
+      assert.deepEqual(resultHandles(derived.$searchTypeaheadResults.get()), [
+        "al.test",
+        "almuted.test",
+        "alprofile.test",
+      ]);
+    });
+
+    it("should apply the same filtering to the sidebar typeahead", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      seedTypeahead(
+        dataStore,
+        dataStore.$sidebarSearchTypeaheadResults,
+        [plain, blocking, labeled],
+        "al",
+      );
+      assert.deepEqual(
+        resultHandles(derived.$sidebarSearchTypeaheadResults.get()),
+        ["al.test"],
+      );
+    });
+
+    it("should keep an exact handle match even when blocked or hide-labeled", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      seedTypeahead(
+        dataStore,
+        dataStore.$searchTypeaheadResults,
+        [blocking],
+        " ALBlocked.test ",
+      );
+      assert.deepEqual(resultHandles(derived.$searchTypeaheadResults.get()), [
+        "alblocked.test",
+      ]);
+      seedTypeahead(
+        dataStore,
+        dataStore.$searchTypeaheadResults,
+        [labeled],
+        "allabeled.test",
+      );
+      assert.deepEqual(resultHandles(derived.$searchTypeaheadResults.get()), [
+        "allabeled.test",
+      ]);
+    });
+
+    it("should apply the same filtering to the mention typeahead", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      seedTypeahead(
+        dataStore,
+        dataStore.$mentionTypeaheadResults,
+        [plain, blocking, muted, labeled],
+        "al",
+      );
+      assert.deepEqual(resultHandles(derived.$mentionTypeaheadResults.get()), [
+        "al.test",
+        "almuted.test",
+      ]);
+    });
+
+    it("should hide an exact handle match with !hide or !takedown", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      const takenDown = createProfile({
+        did: "did:plc:takendown",
+        handle: "gone.test",
+        labels: [accountLabel("did:plc:takendown", "!takedown", "did:plc:mod")],
+      });
+      seedTypeahead(
+        dataStore,
+        dataStore.$searchTypeaheadResults,
+        [takenDown],
+        "gone.test",
+      );
+      assert.deepEqual(derived.$searchTypeaheadResults.get(), []);
+    });
+
+    it("should never hide the current user", () => {
+      const dataStore = new DataStore(createSessionState(null));
+      const { derived } = makeDerived(dataStore, {
+        preferences: makeLabelPreferences(),
+      });
+      dataStore.setCurrentUser(labeled);
+      seedTypeahead(
+        dataStore,
+        dataStore.$searchTypeaheadResults,
+        [labeled],
+        "al",
+      );
+      assert.deepEqual(resultHandles(derived.$searchTypeaheadResults.get()), [
+        "allabeled.test",
+      ]);
+    });
   });
 });
 

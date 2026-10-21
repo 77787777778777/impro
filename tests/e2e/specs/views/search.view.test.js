@@ -935,7 +935,14 @@ test.describe("Search view", () => {
           did: "did:plc:profile2",
           handle: "alicebot.bsky.social",
           displayName: "Alice Bot",
-          labels: [{ val: "bot" }],
+          labels: [
+            {
+              src: "did:plc:profile2",
+              uri: "at://did:plc:profile2/app.bsky.actor.profile/self",
+              val: "bot",
+              cts: "2025-01-01T00:00:00.000Z",
+            },
+          ],
           verification: {
             verifiedStatus: "valid",
             trustedVerifierStatus: "none",
