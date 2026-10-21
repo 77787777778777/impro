@@ -4,6 +4,7 @@ import { TokenRefreshError as OauthRefreshTokenError } from "/js/oauth.js";
 import {
   batch,
   buildQueryString,
+  getBrowserLanguageCodes,
   getCurrentTimestamp,
   unique,
 } from "/js/utils.js";
@@ -68,6 +69,11 @@ function buildAcceptLabelersHeader(labelerDids) {
 function buildBskyTopicsHeader(interests) {
   const tags = interests.tags.join(",");
   return interests.updatedAt ? `${tags};${interests.updatedAt}` : tags;
+}
+
+// Matches the header format in social-app
+function buildAcceptLanguageHeader() {
+  return getBrowserLanguageCodes().join(",");
 }
 
 // Used for merging provided headers with defaults
@@ -437,7 +443,7 @@ export class Api {
   }
 
   async getFeed(feedURI, { limit = 31, cursor = "", interests } = {}) {
-    const headers = {};
+    const headers = { "Accept-Language": buildAcceptLanguageHeader() };
     if (interests) {
       headers["x-atproto-bsky-topics"] = buildBskyTopicsHeader(interests);
     }
@@ -593,6 +599,7 @@ export class Api {
   async getTrends({ limit = 5 } = {}) {
     const res = await this.appViewRequest(`app.bsky.unspecced.getTrends`, {
       query: { limit },
+      headers: { "Accept-Language": buildAcceptLanguageHeader() },
     });
     return res.data;
   }

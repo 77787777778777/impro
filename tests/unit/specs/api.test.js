@@ -852,6 +852,73 @@ describe("getFeed", () => {
   });
 });
 
+describe("Accept-Language header", () => {
+  const FEED_URI = "at://did:plc:feed/app.bsky.feed.generator/myfeed";
+
+  function setLanguages(languages) {
+    Object.defineProperty(navigator, "languages", {
+      value: languages,
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    delete navigator.languages;
+    delete navigator.language;
+  });
+
+  it("sends browser language codes on getFeed", async () => {
+    setLanguages(["en-US", "en-GB", "ja-JP"]);
+    const session = createMockSession({ feed: [] });
+    const api = new Api(session);
+
+    await api.getFeed(FEED_URI);
+
+    const { options } = session.getLastFetchOptions();
+    assert.deepEqual(options.headers["Accept-Language"], "en,ja");
+  });
+
+  it("sends it alongside the topics header", async () => {
+    setLanguages(["fr-FR"]);
+    const session = createMockSession({ feed: [] });
+    const api = new Api(session);
+
+    await api.getFeed(FEED_URI, {
+      interests: { tags: ["art"], updatedAt: null },
+    });
+
+    const { options } = session.getLastFetchOptions();
+    assert.deepEqual(options.headers["Accept-Language"], "fr");
+    assert.deepEqual(options.headers["x-atproto-bsky-topics"], "art");
+  });
+
+  it("sends browser language codes on getTrends", async () => {
+    setLanguages(["de-DE", "en-US"]);
+    const session = createMockSession({ trends: [] });
+    const api = new Api(session);
+
+    await api.getTrends();
+
+    const { options } = session.getLastFetchOptions();
+    assert.deepEqual(options.headers["Accept-Language"], "de,en");
+  });
+
+  it("sends an empty header when no browser languages are available", async () => {
+    setLanguages([]);
+    Object.defineProperty(navigator, "language", {
+      value: "",
+      configurable: true,
+    });
+    const session = createMockSession({ feed: [] });
+    const api = new Api(session);
+
+    await api.getFeed(FEED_URI);
+
+    const { options } = session.getLastFetchOptions();
+    assert.deepEqual(options.headers["Accept-Language"], "");
+  });
+});
+
 describe("getFeedGenerator", () => {
   it("should fetch feed generator and return view", async () => {
     const session = createMockSession({
