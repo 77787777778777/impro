@@ -1161,8 +1161,8 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* @chunk layout */
-.avatar-image-frame.labeler-avatar {
-  border-radius: var(--labeler-avatar-border-radius);
+.labeler-avatar {
+  --avatar-border-radius: var(--labeler-avatar-border-radius);
 }
 
 .avatar-image {
@@ -3796,7 +3796,8 @@ image-carousel {
   display: none;
 }
 
-.hidden-replies-section .small-post {
+.hidden-replies-section .toggle-content > .small-post,
+.hidden-replies-section .toggle-content > .post-thread-tree-row:last-child {
   border-bottom: var(--hair) solid var(--post-border-color);
 }
 
@@ -6232,7 +6233,7 @@ emoji-picker-dialog emoji-picker,
 .known-followers-avatar {
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: var(--avatar-border-radius);
   border: 1px solid var(--background-color);
   overflow: hidden;
   margin-left: -8px;
@@ -6257,7 +6258,7 @@ emoji-picker-dialog emoji-picker,
 .known-followers-avatar .avatar-image {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: var(--avatar-border-radius);
 }
 
 .profile-description {
@@ -9429,7 +9430,7 @@ context-menu-item-group > context-menu-item > button {
   width: 24px;
   height: 24px;
   border: 2px solid var(--background-color);
-  border-radius: 50%;
+  border-radius: var(--avatar-border-radius);
   overflow: hidden;
 }
 
@@ -11598,7 +11599,7 @@ label:has(toggle-switch[disabled]) {
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  border-radius: 50%;
+  border-radius: var(--avatar-border-radius);
 }
 
 .new-chat-result-content {
@@ -11999,7 +12000,7 @@ tab-bar[full-width] .tab-bar-button {
   position: relative;
   width: 80px;
   height: 80px;
-  border-radius: 50%;
+  border-radius: var(--avatar-border-radius);
   overflow: hidden;
   background-color: light-dark(var(--light-gray), var(--dark-gray));
   border: 2px solid light-dark(var(--less-white), var(--dark-gray));
@@ -12077,10 +12078,6 @@ tab-bar[full-width] .tab-bar-button {
 .edit-list-details-dialog .form-dialog-avatar-preview,
 .create-list-dialog .form-dialog-avatar-preview {
   border-radius: var(--list-avatar-border-radius);
-}
-
-.form-dialog-avatar-preview.labeler-avatar {
-  border-radius: var(--labeler-avatar-border-radius);
 }
 
 /* Image Cropper */
