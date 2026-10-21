@@ -8557,6 +8557,93 @@ context-menu-item-group > context-menu-item > button {
   margin-top: 8px;
 }
 
+.fetch-permission-intro {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-color-secondary);
+}
+
+.fetch-permission-intro strong {
+  color: var(--text-color);
+}
+
+.fetch-permission-card {
+  margin-top: 14px;
+  padding: 0 14px;
+  border: 1px solid var(--generic-border-color);
+  border-radius: 12px;
+  background-color: var(--background-color-secondary);
+}
+
+.fetch-permission-origins {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permission-prompt-section .fetch-permission-origins {
+  margin-top: 4px;
+}
+
+.fetch-permission-origin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.permission-prompt-section .fetch-permission-origin {
+  padding: 8px 0;
+}
+
+.permission-prompt-section .fetch-permission-origin:last-child {
+  padding-bottom: 0;
+}
+
+.fetch-permission-origin + .fetch-permission-origin {
+  border-top: 1px solid var(--generic-border-color);
+}
+
+.fetch-permission-origin-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: var(--highlight-color);
+  background-color: color-mix(in srgb, var(--highlight-color) 12%, transparent);
+}
+
+.fetch-permission-origin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fetch-permission-origin-host {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color);
+  overflow-wrap: anywhere;
+}
+
+.fetch-permission-origin-text code {
+  font-family: var(--monospace-font, monospace);
+  font-size: 11px;
+  color: var(--text-color-muted);
+  overflow-wrap: anywhere;
+}
+
+.fetch-permission-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-color-muted);
+}
+
 /* Shared modal base styles */
 .modal-dialog {
   border: var(--hair) solid var(--post-border-color);
