@@ -703,6 +703,139 @@ describe("$actorFeeds", () => {
   });
 });
 
+describe("feed generator and list moderation", () => {
+  const ownerDid = "did:plc:owner";
+  const labelerDid = "did:plc:labeler";
+
+  function makeLabelPreferences() {
+    return new Preferences(
+      [],
+      [
+        createLabelerView({
+          did: labelerDid,
+          handle: "labeler.test",
+          labelDefinitions: [
+            { identifier: "spam", blurs: "content", defaultSetting: "hide" },
+            { identifier: "rude", blurs: "content", defaultSetting: "warn" },
+          ],
+        }),
+      ],
+    );
+  }
+
+  function label(uri, val) {
+    return { src: labelerDid, uri, val, cts: "2025-01-01T00:00:00.000Z" };
+  }
+
+  const plainCreator = createProfile({ did: ownerDid, handle: "owner.test" });
+  const blockingCreator = createProfile({
+    did: "did:plc:blocking",
+    handle: "blocking.test",
+    viewer: { blocking: "at://did:plc:me/app.bsky.graph.block/1" },
+  });
+  const blockedByCreator = createProfile({
+    did: "did:plc:blockedby",
+    handle: "blockedby.test",
+    viewer: { blockedBy: true },
+  });
+  const mutedCreator = createProfile({
+    did: "did:plc:muted",
+    handle: "muted.test",
+    viewer: { muted: true },
+  });
+  const labeledCreator = createProfile({
+    did: "did:plc:labeled",
+    handle: "labeled.test",
+    labels: [label("did:plc:labeled", "spam")],
+  });
+
+  function item(uri, creator, labels = []) {
+    return { uri, creator, labels };
+  }
+
+  const items = [
+    item("plain", plainCreator),
+    item("hide-labeled", plainCreator, [label("hide-labeled", "spam")]),
+    item("warn-labeled", plainCreator, [label("warn-labeled", "rude")]),
+    item("blocking", blockingCreator),
+    item("blocked-by", blockedByCreator),
+    item("muted", mutedCreator),
+    item("labeled-creator", labeledCreator),
+  ];
+
+  function setup() {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: makeLabelPreferences(),
+    });
+    dataStore.setProfiles([
+      plainCreator,
+      blockingCreator,
+      blockedByCreator,
+      mutedCreator,
+      labeledCreator,
+    ]);
+    return { dataStore, derived };
+  }
+
+  function uris(collection) {
+    return collection.map((entry) => entry.uri);
+  }
+
+  it("should hide blocked and hide-labeled feeds on a profile but keep muted creators", () => {
+    const { dataStore, derived } = setup();
+    dataStore.$actorFeeds.set(ownerDid, { feeds: items, cursor: "c" });
+    assert.deepEqual(uris(derived.$actorFeeds.get(ownerDid).feeds), [
+      "plain",
+      "warn-labeled",
+      "muted",
+    ]);
+  });
+
+  it("should hide blocked and hide-labeled lists on a profile but keep muted creators", () => {
+    const { dataStore, derived } = setup();
+    dataStore.$actorLists.set(ownerDid, { lists: items, cursor: "c" });
+    assert.deepEqual(uris(derived.$actorLists.get(ownerDid).lists), [
+      "plain",
+      "warn-labeled",
+      "muted",
+    ]);
+  });
+
+  it("should also hide feeds from muted creators in popular feeds", () => {
+    const { dataStore, derived } = setup();
+    dataStore.$popularFeeds.set(items);
+    assert.deepEqual(uris(derived.$popularFeeds.get()), [
+      "plain",
+      "warn-labeled",
+    ]);
+  });
+
+  it("should never hide the current user's own feeds and lists", () => {
+    const { dataStore, derived } = setup();
+    dataStore.setCurrentUser(labeledCreator);
+    const ownItems = [
+      item("own-labeled", labeledCreator, [label("own-labeled", "spam")]),
+    ];
+    dataStore.$actorFeeds.set(labeledCreator.did, {
+      feeds: ownItems,
+      cursor: "c",
+    });
+    dataStore.$actorLists.set(labeledCreator.did, {
+      lists: ownItems,
+      cursor: "c",
+    });
+    dataStore.$popularFeeds.set(ownItems);
+    assert.deepEqual(uris(derived.$actorFeeds.get(labeledCreator.did).feeds), [
+      "own-labeled",
+    ]);
+    assert.deepEqual(uris(derived.$actorLists.get(labeledCreator.did).lists), [
+      "own-labeled",
+    ]);
+    assert.deepEqual(uris(derived.$popularFeeds.get()), ["own-labeled"]);
+  });
+});
+
 describe("$profileChatStatus", () => {
   const did = "did:plc:user";
 

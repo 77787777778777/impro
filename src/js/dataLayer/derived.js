@@ -146,6 +146,17 @@ function shouldHideTypeaheadProfile(profile, query, preferences) {
   return preferences.hasHideLabel(accountLabels);
 }
 
+// Created items == feed generators and lists
+function shouldHideCreatedItem(item, preferences) {
+  const creator = item.creator;
+  if (creator.viewer?.blocking || creator.viewer?.blockedBy) return true;
+  if (!preferences) return false;
+  return preferences.hasHideLabel([
+    ...(item.labels ?? []),
+    ...(creator.labels ?? []).filter(isAccountLabel),
+  ]);
+}
+
 function filterBlockedReactions(reactions, memberProfiles) {
   return (reactions || []).filter((reaction) => {
     const profile = memberProfiles.find(
@@ -653,17 +664,33 @@ export class Derived extends ReactiveStore {
     this.$actorFeeds = new ComputedMap((did) => {
       const data = this.dataStore.$actorFeeds.get(did);
       if (!data) return data;
+      const currentUserDid = this.$currentUser.get()?.did;
+      const preferences = this.$preferences.get();
       return {
         ...data,
-        feeds: data.feeds.map((feed) => this.hydrateCreator(feed)),
+        feeds: data.feeds
+          .map((feed) => this.hydrateCreator(feed))
+          .filter(
+            (feed) =>
+              feed.creator.did === currentUserDid ||
+              !shouldHideCreatedItem(feed, preferences),
+          ),
       };
     });
     this.$actorLists = new ComputedMap((did) => {
       const data = this.dataStore.$actorLists.get(did);
       if (!data) return data;
+      const currentUserDid = this.$currentUser.get()?.did;
+      const preferences = this.$preferences.get();
       return {
         ...data,
-        lists: data.lists.map((list) => this.hydrateCreator(list)),
+        lists: data.lists
+          .map((list) => this.hydrateCreator(list))
+          .filter(
+            (list) =>
+              list.creator.did === currentUserDid ||
+              !shouldHideCreatedItem(list, preferences),
+          ),
       };
     });
     this.$actorStarterPacks = new ComputedMap((did) => {
@@ -679,10 +706,19 @@ export class Derived extends ReactiveStore {
     this.$popularFeeds = new Signal.Computed(() => {
       const feeds = this.dataStore.$popularFeeds.get();
       if (!feeds) return null;
-      return feeds.map(
-        (feed) =>
-          this.$feedGenerators.get(feed.uri) ?? this.hydrateCreator(feed),
-      );
+      const currentUserDid = this.$currentUser.get()?.did;
+      const preferences = this.$preferences.get();
+      return feeds
+        .map(
+          (feed) =>
+            this.$feedGenerators.get(feed.uri) ?? this.hydrateCreator(feed),
+        )
+        .filter(
+          (feed) =>
+            feed.creator.did === currentUserDid ||
+            (!feed.creator.viewer?.muted &&
+              !shouldHideCreatedItem(feed, preferences)),
+        );
     });
     this.$listsWithMembershipByActor = new ComputedMap((did) =>
       this.dataStore.$listsWithMembershipByActor.get(did),
