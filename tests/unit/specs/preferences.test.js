@@ -2630,6 +2630,22 @@ describe("Preferences.getContentLabel - global labels", () => {
     assert.deepEqual(result.labeler, null);
   });
 
+  it("should resolve the labeler for a global label from a loaded labeler", () => {
+    const labelerDefs = [
+      {
+        creator: { did: "did:plc:modservice", handle: "mod.test" },
+        policies: { labelValueDefinitions: [] },
+      },
+    ];
+    const preferences = new Preferences([], labelerDefs);
+    const post = {
+      labels: [{ src: "did:plc:modservice", val: "!warn" }],
+    };
+    const result = preferences.getContentLabel(post);
+
+    assert.deepEqual(result.labeler, labelerDefs[0]);
+  });
+
   it("should not allow user to override !hide visibility", () => {
     // User tries to set !hide to "ignore" - should still be "hide"
     const obj = [

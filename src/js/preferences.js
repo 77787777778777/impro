@@ -431,13 +431,13 @@ export class Preferences {
   }
 
   getLabelDefinitionAndLabeler(label) {
+    const labeler = getLabelerForLabel(label, this.labelerDefs);
     // First check global labels
     const globalDef = getGlobalLabelDefinition(label.val);
     if (globalDef) {
-      return { labelDefinition: globalDef, labeler: null };
+      return { labelDefinition: globalDef, labeler };
     }
     // Then check labeler-defined labels
-    const labeler = getLabelerForLabel(label, this.labelerDefs);
     if (!labeler) return null;
     const labelDefinition = getDefinitionForLabel(label, labeler);
     if (!labelDefinition) return null;
