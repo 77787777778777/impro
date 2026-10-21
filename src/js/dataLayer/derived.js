@@ -3,6 +3,7 @@ import {
   filterAlgorithmicFeed,
   filterAuthorFeed,
   filterBookmarksFeed,
+  filterSearchResults,
 } from "/js/feedFilters.js";
 import {
   createBlockedPost,
@@ -405,7 +406,7 @@ export class Derived extends ReactiveStore {
         });
       }
       return {
-        feed: hydratedFeedItems,
+        feed: filterSearchResults(hydratedFeedItems, this.isAuthenticated),
         cursor: data.cursor,
       };
     });
@@ -1071,9 +1072,11 @@ export class Derived extends ReactiveStore {
     for (const result of data.posts) {
       const post = this.$hydratedPosts.get(result.uri);
       if (!post) continue;
-      hydratedSearchResults.push(this.attachParentAuthor(post));
+      hydratedSearchResults.push({ post: this.attachParentAuthor(post) });
     }
-    return hydratedSearchResults;
+    return filterSearchResults(hydratedSearchResults, this.isAuthenticated).map(
+      (item) => item.post,
+    );
   }
 
   hydrateNotification(rawNotification) {

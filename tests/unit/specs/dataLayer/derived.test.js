@@ -390,6 +390,42 @@ describe("$hydratedHashtagFeeds", () => {
     assert.deepEqual(result.feed[0].post.likeCount, 6);
     assert.deepEqual(result.feed[0].post.viewer.like, "fake like");
   });
+
+  it("should filter out muted, hidden, and hide-labeled posts", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: fakePreferences({
+        isPostHidden: (uri) => uri === "hidden",
+        getContentLabel: (post) =>
+          post.uri === "labeled" ? { visibility: "hide" } : null,
+      }),
+    });
+    const mutedAuthor = createProfile({
+      did: "did:plc:muted",
+      handle: "muted.test",
+      viewer: { muted: true },
+    });
+    dataStore.setProfiles([mutedAuthor]);
+    dataStore.$posts.set("muted", { uri: "muted", author: mutedAuthor });
+    dataStore.$posts.set("hidden", { uri: "hidden" });
+    dataStore.$posts.set("labeled", { uri: "labeled" });
+    dataStore.$posts.set("ok", { uri: "ok" });
+    dataStore.$hashtagFeeds.set(hashtagKey, {
+      posts: [
+        { uri: "muted" },
+        { uri: "hidden" },
+        { uri: "labeled" },
+        { uri: "ok" },
+      ],
+      cursor: "c",
+    });
+
+    const result = derived.$hydratedHashtagFeeds.get(hashtagKey);
+    assert.deepEqual(
+      result.feed.map((item) => item.post.uri),
+      ["ok"],
+    );
+  });
 });
 
 describe("$hydratedProfiles", () => {
@@ -2694,6 +2730,41 @@ describe("post search results", () => {
     assert.deepEqual(latest.length, 1);
     assert.deepEqual(derived.$postSearchCursorTop.get(), "tc");
     assert.deepEqual(derived.$postSearchCursorLatest.get(), "lc");
+  });
+
+  it("should filter out muted, hidden, and hide-labeled posts", () => {
+    const dataStore = new DataStore(createSessionState(null));
+    const { derived } = makeDerived(dataStore, {
+      preferences: fakePreferences({
+        isPostHidden: (uri) => uri === "hidden",
+        getMediaLabel: (post) =>
+          post.uri === "labeled" ? { visibility: "hide" } : null,
+      }),
+    });
+    const mutedAuthor = createProfile({
+      did: "did:plc:muted",
+      handle: "muted.test",
+      viewer: { muted: true },
+    });
+    dataStore.setProfiles([mutedAuthor]);
+    dataStore.$posts.set("muted", { uri: "muted", author: mutedAuthor });
+    dataStore.$posts.set("hidden", { uri: "hidden" });
+    dataStore.$posts.set("labeled", { uri: "labeled" });
+    dataStore.$posts.set("ok", { uri: "ok" });
+    dataStore.$postSearchResultsTop.set({
+      posts: [
+        { uri: "muted" },
+        { uri: "hidden" },
+        { uri: "labeled" },
+        { uri: "ok" },
+      ],
+      cursor: "tc",
+    });
+
+    assert.deepEqual(
+      derived.$postSearchResultsTop.get().map((post) => post.uri),
+      ["ok"],
+    );
   });
 });
 

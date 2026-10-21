@@ -371,6 +371,19 @@ export function filterAlgorithmicFeed(
   };
 }
 
+export function filterSearchResults(feedItems, isAuthenticated) {
+  const filter = FeedFilter.compose(
+    new FilterBlockedQuotes(),
+    new FilterBlockedPosts(),
+    new FilterMutedQuotes(),
+    new FilterMutedPosts(),
+    new FilterHiddenPosts(),
+    new FilterContentLabeledPosts(),
+    new FilterUnauthorizedPosts(isAuthenticated),
+  );
+  return filter.filterFeedItems(feedItems);
+}
+
 export function filterBookmarksFeed(feed) {
   return {
     feed: new FilterEmptyPosts().filterFeedItems(feed.feed),
