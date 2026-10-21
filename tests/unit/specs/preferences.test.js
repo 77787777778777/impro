@@ -355,6 +355,44 @@ describe("Preferences.getLabelerDids", () => {
   });
 });
 
+describe("Preferences.getInterests", () => {
+  it("should return tags and updatedAt from the interests preference", () => {
+    const preferences = new Preferences(
+      [
+        {
+          $type: "app.bsky.actor.defs#interestsPref",
+          tags: ["art", "tech"],
+          updatedAt: "2025-03-01T00:00:00.000Z",
+        },
+      ],
+      [],
+    );
+
+    assert.deepEqual(preferences.getInterests(), {
+      tags: ["art", "tech"],
+      updatedAt: "2025-03-01T00:00:00.000Z",
+    });
+  });
+
+  it("should return null updatedAt when not set", () => {
+    const preferences = new Preferences(
+      [{ $type: "app.bsky.actor.defs#interestsPref", tags: ["art"] }],
+      [],
+    );
+
+    assert.deepEqual(preferences.getInterests(), {
+      tags: ["art"],
+      updatedAt: null,
+    });
+  });
+
+  it("should return empty interests when there is no interests preference", () => {
+    const preferences = new Preferences([], []);
+
+    assert.deepEqual(preferences.getInterests(), { tags: [], updatedAt: null });
+  });
+});
+
 describe("Preferences.getMutedWords", () => {
   it("should return muted words items", () => {
     const obj = [

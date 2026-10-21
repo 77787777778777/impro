@@ -326,6 +326,17 @@ export class Preferences {
     return Preferences.getLabelerDidsFromPreferences(this.obj);
   }
 
+  getInterests() {
+    const pref = Preferences.getPreferenceByType(
+      this.obj,
+      "app.bsky.actor.defs#interestsPref",
+    );
+    if (!pref) {
+      return { tags: [], updatedAt: null };
+    }
+    return { tags: pref.tags, updatedAt: pref.updatedAt ?? null };
+  }
+
   isSubscribedToLabeler(did) {
     const labelerPreference = Preferences.getLabelerPreference(this.obj);
     if (!labelerPreference) {

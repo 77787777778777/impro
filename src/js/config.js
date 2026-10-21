@@ -38,6 +38,12 @@ export const VIDEO_SERVICE_DID = "did:web:video.bsky.app";
 
 export const BSKY_LABELER_DID = "did:plc:ar7c4by46qjdydhdevvrndac";
 
+export const BSKY_FEED_OWNER_DIDS = [
+  "did:plc:z72i7hdynmk6r22z27h6tvur",
+  "did:plc:vpkhqolt662uhesyj6nxm7ys",
+  "did:plc:q6gjnaw2blty4crticxkmujt",
+];
+
 export const LIVE_ALLOWED_SERVICES = [
   { domain: "twitch.tv", displayName: "Twitch" },
   { domain: "stream.place", displayName: "Streamplace" },

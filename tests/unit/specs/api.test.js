@@ -794,6 +794,62 @@ describe("getFeed", () => {
     assert(url.includes("limit=50"));
     assert(url.includes("cursor=somecursor"));
   });
+
+  describe("topics header", () => {
+    const FEED_URI = "at://did:plc:feed/app.bsky.feed.generator/myfeed";
+
+    it("serializes tags and updatedAt into the header", async () => {
+      const session = createMockSession({ feed: [] });
+      const api = new Api(session);
+
+      await api.getFeed(FEED_URI, {
+        interests: {
+          tags: ["art", "tech"],
+          updatedAt: "2025-03-01T00:00:00.000Z",
+        },
+      });
+
+      const { options } = session.getLastFetchOptions();
+      assert.deepEqual(
+        options.headers["x-atproto-bsky-topics"],
+        "art,tech;2025-03-01T00:00:00.000Z",
+      );
+    });
+
+    it("omits updatedAt when not set", async () => {
+      const session = createMockSession({ feed: [] });
+      const api = new Api(session);
+
+      await api.getFeed(FEED_URI, {
+        interests: { tags: ["art", "tech"], updatedAt: null },
+      });
+
+      const { options } = session.getLastFetchOptions();
+      assert.deepEqual(options.headers["x-atproto-bsky-topics"], "art,tech");
+    });
+
+    it("sends an empty header for empty interests", async () => {
+      const session = createMockSession({ feed: [] });
+      const api = new Api(session);
+
+      await api.getFeed(FEED_URI, {
+        interests: { tags: [], updatedAt: null },
+      });
+
+      const { options } = session.getLastFetchOptions();
+      assert.deepEqual(options.headers["x-atproto-bsky-topics"], "");
+    });
+
+    it("does not send the header when interests are null", async () => {
+      const session = createMockSession({ feed: [] });
+      const api = new Api(session);
+
+      await api.getFeed(FEED_URI, { interests: null });
+
+      const { options } = session.getLastFetchOptions();
+      assert.deepEqual(options.headers["x-atproto-bsky-topics"], undefined);
+    });
+  });
 });
 
 describe("getFeedGenerator", () => {

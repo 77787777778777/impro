@@ -147,6 +147,63 @@ describe("loadPostThread", () => {
 describe("loadNextFeedPage", () => {
   const feedURI = "at://did:test/app.bsky.feed.generator/test";
 
+  describe("interests", () => {
+    const BSKY_FEED_URI =
+      "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot";
+    const interestsPreferences = new Preferences(
+      [
+        {
+          $type: "app.bsky.actor.defs#interestsPref",
+          tags: ["art", "tech"],
+          updatedAt: "2025-03-01T00:00:00.000Z",
+        },
+      ],
+      [],
+    );
+
+    function makeCapturingApi({ isAuthenticated = true } = {}) {
+      const calls = [];
+      return {
+        calls,
+        isAuthenticated,
+        getFeed: async (uri, options) => {
+          calls.push(options);
+          return { feed: [], cursor: "" };
+        },
+      };
+    }
+
+    it("should pass the user's interests for Bluesky-owned feeds", async () => {
+      const mockApi = makeCapturingApi();
+      const requests = makeRequests(mockApi, undefined, interestsPreferences);
+
+      await requests.loadNextFeedPage({ type: "feed", uri: BSKY_FEED_URI });
+
+      assert.deepEqual(mockApi.calls[0].interests, {
+        tags: ["art", "tech"],
+        updatedAt: "2025-03-01T00:00:00.000Z",
+      });
+    });
+
+    it("should not pass interests for third-party feeds", async () => {
+      const mockApi = makeCapturingApi();
+      const requests = makeRequests(mockApi, undefined, interestsPreferences);
+
+      await requests.loadNextFeedPage({ type: "feed", uri: feedURI });
+
+      assert.deepEqual(mockApi.calls[0].interests, null);
+    });
+
+    it("should not pass interests when logged out", async () => {
+      const mockApi = makeCapturingApi({ isAuthenticated: false });
+      const requests = makeRequests(mockApi, undefined, interestsPreferences);
+
+      await requests.loadNextFeedPage({ type: "feed", uri: BSKY_FEED_URI });
+
+      assert.deepEqual(mockApi.calls[0].interests, null);
+    });
+  });
+
   it("should cache post numbering from feed items that carry it", async () => {
     const mockApi = {
       getFeed: async () => ({

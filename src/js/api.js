@@ -64,6 +64,12 @@ function buildAcceptLabelersHeader(labelerDids) {
     .join(", ");
 }
 
+// Matches the header format in social-app
+function buildBskyTopicsHeader(interests) {
+  const tags = interests.tags.join(",");
+  return interests.updatedAt ? `${tags};${interests.updatedAt}` : tags;
+}
+
 // Used for merging provided headers with defaults
 function parseAcceptLabelersHeader(header) {
   return (header ?? "")
@@ -430,13 +436,18 @@ export class Api {
     return res.data.thread;
   }
 
-  async getFeed(feedURI, { limit = 31, cursor = "" } = {}) {
+  async getFeed(feedURI, { limit = 31, cursor = "", interests } = {}) {
+    const headers = {};
+    if (interests) {
+      headers["x-atproto-bsky-topics"] = buildBskyTopicsHeader(interests);
+    }
     const res = await this.appViewRequest(`app.bsky.feed.getFeed`, {
       query: {
         feed: feedURI,
         limit,
         cursor,
       },
+      headers,
     });
     return res.data;
   }
