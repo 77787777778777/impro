@@ -924,6 +924,10 @@ export class Requests {
           params.filter = "posts_with_media";
           params.includePins = false;
           break;
+        case "videos":
+          params.filter = "posts_with_video";
+          params.includePins = false;
+          break;
         default:
           throw new Error(`Unknown feed type: ${feedType}`);
       }
