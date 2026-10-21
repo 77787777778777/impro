@@ -12079,6 +12079,10 @@ tab-bar[full-width] .tab-bar-button {
   border-radius: var(--list-avatar-border-radius);
 }
 
+.form-dialog-avatar-preview.labeler-avatar {
+  border-radius: var(--labeler-avatar-border-radius);
+}
+
 /* Image Cropper */
 
 image-cropper {
