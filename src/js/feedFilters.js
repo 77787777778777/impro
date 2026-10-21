@@ -288,6 +288,9 @@ class FilterContentLabeledPosts extends FeedFilter {
       if (contentLabel?.visibility === "hide") {
         return false;
       }
+      if (item.post.mediaLabel?.visibility === "hide") {
+        return false;
+      }
       if (hasHiddenBadgeLabel(item.post)) {
         return false;
       }
