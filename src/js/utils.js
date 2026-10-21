@@ -343,17 +343,6 @@ export function throttle(fn, delay = 250) {
   };
 }
 
-export function debounce(fn, delay) {
-  let timeoutId = null;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      timeoutId = null;
-      fn(...args);
-    }, delay);
-  };
-}
-
 // Throttle calls that share a key (by default, the first arg)
 export function throttleByKey(
   fn,

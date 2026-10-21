@@ -12,7 +12,6 @@ import {
   TabScrollMemory,
   StickyFixer,
   classnames,
-  debounce,
   getCurrentTimestamp,
 } from "/js/utils.js";
 import { Signal, ReactiveStore, SignalSet } from "/js/signals.js";
@@ -858,14 +857,9 @@ export default async function notificationsView({
     scrollAndReloadNotifications();
   });
 
-  bindToPage(
-    root,
-    window,
-    "scroll",
-    debounce(() => {
-      state.$isScrolledDown.set(window.scrollY > SCROLLED_DOWN_LIMIT);
-    }, 100),
-  );
+  bindToPage(root, window, "scroll", () => {
+    state.$isScrolledDown.set(window.scrollY > SCROLLED_DOWN_LIMIT);
+  });
 
   bindPageTitle(root, () => "Notifications");
 
