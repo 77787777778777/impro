@@ -1818,7 +1818,7 @@ test.describe("Notifications view", () => {
       await expect(button).toHaveCount(0);
     });
 
-    test("should clear the badge when the reload starts and keep loaded items unread", async ({
+    test("should clear the badge only once the reload finishes and keep loaded items unread", async ({
       page,
     }) => {
       const mockServer = new MockServer();
@@ -1858,9 +1858,10 @@ test.describe("Notifications view", () => {
       const followItem = view.locator(
         '[data-testid="notification-item"][data-teststate="follow"]',
       );
-      await expect(badge).toHaveCount(0, { timeout: 1000 });
       await expect(followItem).toHaveCount(0);
+      await expect(badge).toBeVisible();
       await expect(followItem).toBeVisible({ timeout: 10000 });
+      await expect(badge).toHaveCount(0);
       await expect(followItem).toHaveClass(/unread/);
     });
   });

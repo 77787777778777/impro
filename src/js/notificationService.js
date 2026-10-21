@@ -58,13 +58,10 @@ export class NotificationService {
     }
     return false;
   }
-  clearNumNotifications() {
-    this.$numNotifications.set(0);
-  }
 
   async markNotificationsAsRead(seenAt) {
     // optimistic update
-    this.clearNumNotifications();
+    this.$numNotifications.set(0);
     let updated = false;
     let retries = 0;
     // Try this a few times, since the endpoint is pretty unstable

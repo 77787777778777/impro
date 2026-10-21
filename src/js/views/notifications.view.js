@@ -977,11 +977,11 @@ export default async function notificationsView({
 
   async function loadNotifications({ reload = false } = {}) {
     const seenAt = getCurrentTimestamp();
-    notificationService.clearNumNotifications();
     await dataLayer.requests.loadNotifications({
       reload,
       limit: NOTIFICATIONS_PAGE_SIZE,
     });
+    if (dataLayer.requests.statusStore.getError("loadNotifications")) return;
     // can be called async
     notificationService.markNotificationsAsRead(seenAt);
   }
