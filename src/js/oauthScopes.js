@@ -185,7 +185,38 @@ function buildOauthScopesString() {
   return scopes.join(" ");
 }
 
+const TRANSITION_CHAT_SCOPE = "transition:chat.bsky";
+
+function isChatRpcScope(scope) {
+  return scope.startsWith("rpc:chat.bsky.");
+}
+
+export function isTransitionScopeModel(authServerMetadata) {
+  const supported = authServerMetadata?.scopes_supported;
+  if (!Array.isArray(supported) || supported.length === 0) {
+    return false;
+  }
+  const hasTransition = supported.some(
+    (s) => s === "transition:chat.bsky" || s === "transition:generic",
+  );
+  const hasGranular = supported.some(
+    (s) => s.startsWith("rpc:") || s.startsWith("include:"),
+  );
+  return hasTransition && !hasGranular;
+}
+
+export function oauthScopesFor(authServerMetadata, requested = OAUTH_SCOPES) {
+  if (!isTransitionScopeModel(authServerMetadata)) {
+    return requested;
+  }
+  const scopes = requested.split(" ").filter((s) => !isChatRpcScope(s));
+  scopes.push(TRANSITION_CHAT_SCOPE);
+  return scopes.join(" ");
+}
+
 export const OAUTH_SCOPES = buildOauthScopesString();
 export const OPTIONAL_OAUTH_SCOPES = expandScopes(
   OPTIONAL_OAUTH_RPC_SCOPES,
 ).join(" ");
+
+export const DECLARED_OAUTH_SCOPES = `${OAUTH_SCOPES} ${TRANSITION_CHAT_SCOPE}`;

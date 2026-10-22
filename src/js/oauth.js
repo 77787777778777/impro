@@ -1,4 +1,5 @@
 import { resolveIdentity, getServiceEndpointFromDidDoc } from "/js/atproto.js";
+import { oauthScopesFor } from "/js/oauthScopes.js";
 
 // Inspiration from:
 // https://www.npmjs.com/package/@atproto/oauth-client-browser
@@ -564,6 +565,7 @@ export class OauthClient {
     }
     const authServerUrl = resourceMetadata.authorization_servers[0];
     const authServerMetadata = await fetchAuthServerMetadata(authServerUrl);
+    const effectiveScope = oauthScopesFor(authServerMetadata, scope);
 
     const codeVerifier = generateRandomString(64);
     const codeChallenge = await sha256(codeVerifier);
@@ -593,7 +595,7 @@ export class OauthClient {
       state: encodeURIComponent(JSON.stringify({ requestId, ...state })),
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
-      scope,
+      scope: effectiveScope,
       login_hint: handle,
     });
     let authUrl = null;
